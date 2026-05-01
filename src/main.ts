@@ -3,16 +3,22 @@ import { listen } from "@tauri-apps/api/event";
 import type { LineSeriesOption } from "echarts/charts";
 import { LineChart } from "echarts/charts";
 import type { GridComponentOption, TooltipComponentOption } from "echarts/components";
-import { GridComponent, MarkLineComponent, MarkPointComponent, TooltipComponent } from "echarts/components";
+import { GridComponent, TooltipComponent } from "echarts/components";
 import type { ComposeOption, ECharts } from "echarts/core";
 import { init, use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { ModelSnapshot, ModelView } from "./model";
 import "./style.css";
 
-use([LineChart, GridComponent, MarkLineComponent, MarkPointComponent, TooltipComponent, CanvasRenderer]);
+use([LineChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
 type LiveChartOption = ComposeOption<GridComponentOption | TooltipComponentOption | LineSeriesOption>;
+
+declare global {
+  interface Window {
+    __TAURI_INTERNALS__?: unknown;
+  }
+}
 
 type StatusSnapshot = {
   state: "live" | "searching" | "simulated" | "error";
@@ -64,22 +70,6 @@ const model = new ModelView(els.modelView, (rate) => {
 });
 let charts: LiveCharts | null = null;
 
-void listen<StatusSnapshot>("status", (event) => {
-  pendingStatus = event.payload;
-});
-void listen<AccelSnapshot>("accel", (event) => {
-  charts?.updateAccel(event.payload.samples);
-});
-void listen<FftSnapshot>("fft", (event) => {
-  charts?.updateFft(event.payload.freqs, event.payload.combinedDb, event.payload.peakHz);
-  pendingFft = event.payload;
-});
-void listen<ModelSnapshot>("model", (event) => {
-  latestModel = event.payload;
-  model.applySnapshot(latestModel);
-  pendingSensor = latestModel;
-});
-
 function requireElement(id: string): HTMLElement {
   const element = document.getElementById(id);
   if (!element) {
@@ -124,7 +114,7 @@ class LiveCharts {
     this.accel.setOption(createBaseOption({ yMin: -2, yMax: 2, unit: "g", showXAxisLabels: false }));
     this.fft.setOption(createBaseOption({ unit: "dB", showXAxisLabels: true }));
     this.updateAccel([]);
-    this.updateFft([], [], 0);
+    this.updateFft([], []);
 
     const resizeObserver = new ResizeObserver(() => {
       this.accel.resize();
@@ -163,7 +153,7 @@ class LiveCharts {
     );
   }
 
-  updateFft(freqs: number[], db: number[], peakHz: number): void {
+  updateFft(freqs: number[], db: number[]): void {
     const data: Array<[number, number]> = [];
     const count = Math.min(freqs.length, db.length);
 
@@ -178,76 +168,15 @@ class LiveCharts {
     this.fft.setOption(
       {
         yAxis: createAutoYAxis(data.map(([, value]) => value), "dB"),
-        series: [createFftSeries(data, peakHz)],
+        series: [createFftSeries(data)],
       },
       { lazyUpdate: true, silent: true },
     );
   }
 }
 
-function createFftSeries(data: Array<[number, number]>, peakHz: number): LineSeriesOption {
-  const series = createLineSeries("Combined", data, "#14161a");
-  const peak = findPeakPoint(data, peakHz);
-
-  if (!peak) {
-    return series;
-  }
-
-  return {
-    ...series,
-    markLine: {
-      animation: false,
-      silent: true,
-      symbol: "none",
-      data: [{ xAxis: peak[0] }],
-      label: {
-        show: true,
-        formatter: `${peak[0].toFixed(2)} Hz`,
-        color: "hsl(240 5.9% 10%)",
-        fontSize: 11,
-        fontWeight: 600,
-        position: "insideEndTop",
-        distance: 6,
-      },
-      lineStyle: {
-        color: "hsl(346 77% 49%)",
-        type: "dashed",
-        width: 1.5,
-      },
-    },
-    markPoint: {
-      animation: false,
-      silent: true,
-      symbol: "circle",
-      symbolSize: 8,
-      data: [{ name: "Peak", coord: peak }],
-      itemStyle: {
-        color: "hsl(346 77% 49%)",
-        borderColor: "hsl(0 0% 100%)",
-        borderWidth: 2,
-      },
-      label: { show: false },
-    },
-  };
-}
-
-function findPeakPoint(data: Array<[number, number]>, peakHz: number): [number, number] | null {
-  if (!Number.isFinite(peakHz) || peakHz <= 0 || data.length === 0) {
-    return null;
-  }
-
-  let closest = data[0];
-  let closestDistance = Math.abs(data[0][0] - peakHz);
-
-  for (let i = 1; i < data.length; i += 1) {
-    const distance = Math.abs(data[i][0] - peakHz);
-    if (distance < closestDistance) {
-      closest = data[i];
-      closestDistance = distance;
-    }
-  }
-
-  return closest[0] <= 1000 ? closest : null;
+function createFftSeries(data: Array<[number, number]>): LineSeriesOption {
+  return createLineSeries("Combined", data, "#14161a");
 }
 
 function createBaseOption({
@@ -366,6 +295,114 @@ function createLineSeries(name: string, data: Array<[number, number]>, color: st
   };
 }
 
+function startTauriStream(): void {
+  void listen<StatusSnapshot>("status", (event) => {
+    pendingStatus = event.payload;
+  });
+  void listen<AccelSnapshot>("accel", (event) => {
+    charts?.updateAccel(event.payload.samples);
+  });
+  void listen<FftSnapshot>("fft", (event) => {
+    charts?.updateFft(event.payload.freqs, event.payload.combinedDb);
+    pendingFft = event.payload;
+  });
+  void listen<ModelSnapshot>("model", (event) => {
+    latestModel = event.payload;
+    model.applySnapshot(latestModel);
+    pendingSensor = latestModel;
+  });
+
+  void invoke("start_stream").catch((error) => {
+    pendingStatus = {
+      state: "error",
+      detail: String(error),
+      sampleRateHz: 8000,
+      frameRateHz: 160,
+      sequenceGaps: 0,
+      resyncs: 0,
+    };
+  });
+}
+
+function startBrowserPreview(): void {
+  pendingStatus = {
+    state: "simulated",
+    detail: "Browser preview; open the Tauri app for serial streaming",
+    sampleRateHz: 8000,
+    frameRateHz: 160,
+    sequenceGaps: 0,
+    resyncs: 0,
+  };
+
+  let sampleIndex = 0;
+  window.setInterval(() => {
+    const samples: number[] = [];
+    let latest: [number, number, number] = [0, 0, 1];
+
+    for (let i = 0; i < 1000; i += 1) {
+      latest = simulatedSample(sampleIndex + i);
+      samples.push(...latest);
+    }
+
+    sampleIndex += 80;
+    charts?.updateAccel(samples);
+    latestModel = createModelSnapshot(latest);
+    model.applySnapshot(latestModel);
+    pendingSensor = latestModel;
+  }, 50);
+
+  window.setInterval(() => {
+    const snapshot = simulatedFftSnapshot();
+    charts?.updateFft(snapshot.freqs, snapshot.combinedDb);
+    pendingFft = snapshot;
+  }, 200);
+}
+
+function simulatedSample(sampleIndex: number): [number, number, number] {
+  const t = sampleIndex / 8000;
+  const tau = 2 * Math.PI;
+  return [
+    0.22 * Math.sin(tau * 35 * t) + simulatedAxisNoise(sampleIndex, 0),
+    0.16 * Math.sin(tau * 90 * t) + simulatedAxisNoise(sampleIndex, 1),
+    1 + 0.08 * Math.sin(tau * 13 * t) + simulatedAxisNoise(sampleIndex, 2),
+  ];
+}
+
+function simulatedAxisNoise(sampleIndex: number, axis: number): number {
+  let value = Math.imul(sampleIndex >>> 0, 747796405) >>> 0;
+  value = (value + Math.imul(axis >>> 0, 2891336453) + 2891336453) >>> 0;
+  value = (value ^ (value >>> 16)) >>> 0;
+  value = Math.imul(value, 2246822519) >>> 0;
+  value = (value ^ (value >>> 13)) >>> 0;
+  value = Math.imul(value, 3266489917) >>> 0;
+  value = (value ^ (value >>> 16)) >>> 0;
+  return ((value / 0xffffffff) * 2 - 1) * 0.0001;
+}
+
+function simulatedFftSnapshot(): FftSnapshot {
+  const freqs: number[] = [];
+  const combinedDb: number[] = [];
+  const peakHz = 35.16;
+
+  for (let freq = 0; freq <= 1000; freq += 2) {
+    freqs.push(freq);
+    combinedDb.push(Math.max(
+      -120,
+      -118 +
+        82 * Math.exp(-((freq - peakHz) ** 2) / 28) +
+        14 * Math.exp(-((freq - 90) ** 2) / 40),
+    ));
+  }
+
+  return { freqs, combinedDb, peakHz, peakAxis: "x" };
+}
+
+function createModelSnapshot([ax, ay, az]: [number, number, number]): ModelSnapshot {
+  const roll = Math.atan2(ax, Math.sqrt(ay * ay + az * az)) * 180 / Math.PI;
+  const yaw = Math.atan2(ay, az) * 180 / Math.PI;
+  return { ax, ay, az, roll, pitch: 0, yaw };
+}
+
 window.setInterval(() => {
   if (pendingStatus) {
     applyStatus(pendingStatus);
@@ -383,13 +420,8 @@ window.setInterval(() => {
 
 charts = new LiveCharts(els.accelChart, els.fftChart);
 
-void invoke("start_stream").catch((error) => {
-  pendingStatus = {
-    state: "error",
-    detail: String(error),
-    sampleRateHz: 8000,
-    frameRateHz: 160,
-    sequenceGaps: 0,
-    resyncs: 0,
-  };
-});
+if (window.__TAURI_INTERNALS__) {
+  startTauriStream();
+} else {
+  startBrowserPreview();
+}

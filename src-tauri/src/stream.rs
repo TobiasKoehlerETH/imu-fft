@@ -19,7 +19,7 @@ pub const FRAME_RATE_HZ: f32 = 160.0;
 pub const GPM2_LSB_PER_G: f32 = 16384.0;
 const RING_CAPACITY: usize = dsp::FFT_SIZE * 2;
 const ACCEL_SNAPSHOT_SAMPLES: usize = 1000;
-const SIMULATED_AXIS_NOISE_G: f32 = 0.0001;
+const SIMULATED_AXIS_NOISE_G: f32 = 0.001;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -69,6 +69,8 @@ enum ParserState {
     Payload,
 }
 
+/// Streaming, allocation-free 8 kHz frame parser.
+/// See `README.md` ("8 kHz frame parser") for the design notes.
 pub struct FrameParser {
     state: ParserState,
     payload: [u8; PAYLOAD_BYTES],
@@ -457,12 +459,10 @@ fn run_simulator(app: &AppHandle, stop: &AtomicBool, sequence_gaps: u64, resyncs
 }
 
 fn simulated_sample(sample_index: usize) -> [f32; 3] {
-    let t = sample_index as f32 / SAMPLE_RATE_HZ;
-    let tau = 2.0 * std::f32::consts::PI;
     [
-        0.22 * (tau * 35.0 * t).sin() + simulated_axis_noise(sample_index, 0),
-        0.16 * (tau * 90.0 * t).sin() + simulated_axis_noise(sample_index, 1),
-        1.0 + 0.08 * (tau * 13.0 * t).sin() + simulated_axis_noise(sample_index, 2),
+        simulated_axis_noise(sample_index, 0),
+        simulated_axis_noise(sample_index, 1),
+        simulated_axis_noise(sample_index, 2),
     ]
 }
 
@@ -623,10 +623,11 @@ mod tests {
     }
 
     #[test]
-    fn simulated_axis_noise_stays_within_point_one_mg() {
+    fn simulated_axis_noise_stays_within_one_mg() {
         for sample_index in 0..10_000 {
             for axis in 0..3 {
                 assert!(simulated_axis_noise(sample_index, axis).abs() <= SIMULATED_AXIS_NOISE_G);
+                assert!(simulated_axis_noise(sample_index, axis).abs() <= 0.001);
             }
         }
     }

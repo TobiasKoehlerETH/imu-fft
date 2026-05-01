@@ -188,6 +188,18 @@ select {
   color: hsl(var(--foreground));
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  text-align: right;
+  display: inline-block;
+}
+
+#peak-value {
+  min-width: 8ch;
+}
+
+#head-ax,
+#head-ay,
+#head-az {
+  min-width: 6ch;
 }
 
 .axis-chip,
