@@ -27,7 +27,7 @@ export class ModelView {
     private readonly onRate: (rate: number) => void,
   ) {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setClearColor(0xf7f7f7, 1);
+    this.renderer.setClearColor(0xffffff, 1);
     this.host.appendChild(this.renderer.domElement);
 
     this.camera.position.set(0.8, 0.6, 1.9);
@@ -66,8 +66,9 @@ export class ModelView {
         const box = new THREE.Box3().setFromObject(object);
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3()).length() || 1;
-        object.position.sub(center);
-        object.scale.setScalar(1.2 / size);
+        const scale = 1.2 / size;
+        object.scale.setScalar(scale);
+        object.position.copy(center).multiplyScalar(-scale);
         this.modelRoot.add(object);
       },
       undefined,
@@ -93,7 +94,7 @@ export class ModelView {
     const rect = this.host.getBoundingClientRect();
     const width = Math.max(1, Math.floor(rect.width));
     const height = Math.max(1, Math.floor(rect.height));
-    this.renderer.setSize(width, height, false);
+    this.renderer.setSize(width, height, true);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
   }

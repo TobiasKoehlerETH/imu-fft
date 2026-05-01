@@ -1,7 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { LineSeriesOption } from "echarts/charts";
+import { LineChart } from "echarts/charts";
+import type { GridComponentOption, TooltipComponentOption } from "echarts/components";
+import { GridComponent, MarkLineComponent, MarkPointComponent, TooltipComponent } from "echarts/components";
+import type { ComposeOption, ECharts } from "echarts/core";
+import { init, use } from "echarts/core";
+import { CanvasRenderer } from "echarts/renderers";
 import { ModelSnapshot, ModelView } from "./model";
 import "./style.css";
+
+use([LineChart, GridComponent, MarkLineComponent, MarkPointComponent, TooltipComponent, CanvasRenderer]);
+
+type LiveChartOption = ComposeOption<GridComponentOption | TooltipComponentOption | LineSeriesOption>;
 
 type StatusSnapshot = {
   state: "live" | "searching" | "simulated" | "error";
@@ -39,57 +50,40 @@ const els = {
   healthReadout: requireElement("health-readout"),
   modelRate: requireElement("model-rate"),
   modelView: requireElement("model-view"),
-  accelCanvas: requireCanvas("accel-canvas"),
-  fftCanvas: requireCanvas("fft-canvas"),
+  accelChart: requireElement("accel-chart"),
+  fftChart: requireElement("fft-chart"),
 };
 
-let latestAccel: AccelSnapshot = { samples: [] };
-let latestFft: FftSnapshot = { freqs: [], combinedDb: [], peakHz: 0, peakAxis: "x" };
 let latestModel: ModelSnapshot = { ax: 0, ay: 0, az: 0, roll: 0, pitch: 0, yaw: 0 };
+let pendingStatus: StatusSnapshot | null = null;
+let pendingFft: FftSnapshot | null = null;
+let pendingSensor: ModelSnapshot | null = null;
 
 const model = new ModelView(els.modelView, (rate) => {
   els.modelRate.textContent = `${rate.toFixed(0)} Hz`;
 });
+let charts: LiveCharts | null = null;
 
-void listen<StatusSnapshot>("status", (event) => applyStatus(event.payload));
+void listen<StatusSnapshot>("status", (event) => {
+  pendingStatus = event.payload;
+});
 void listen<AccelSnapshot>("accel", (event) => {
-  latestAccel = event.payload;
+  charts?.updateAccel(event.payload.samples);
 });
 void listen<FftSnapshot>("fft", (event) => {
-  latestFft = event.payload;
-  applyFftReadouts(latestFft);
+  charts?.updateFft(event.payload.freqs, event.payload.combinedDb, event.payload.peakHz);
+  pendingFft = event.payload;
 });
 void listen<ModelSnapshot>("model", (event) => {
   latestModel = event.payload;
   model.applySnapshot(latestModel);
-  applySensorReadouts(latestModel);
+  pendingSensor = latestModel;
 });
-
-void invoke("start_stream").catch((error) => {
-  applyStatus({
-    state: "error",
-    detail: String(error),
-    sampleRateHz: 8000,
-    frameRateHz: 160,
-    sequenceGaps: 0,
-    resyncs: 0,
-  });
-});
-
-requestAnimationFrame(drawLoop);
 
 function requireElement(id: string): HTMLElement {
   const element = document.getElementById(id);
   if (!element) {
     throw new Error(`Missing element: ${id}`);
-  }
-  return element;
-}
-
-function requireCanvas(id: string): HTMLCanvasElement {
-  const element = requireElement(id);
-  if (!(element instanceof HTMLCanvasElement)) {
-    throw new Error(`Element is not a canvas: ${id}`);
   }
   return element;
 }
@@ -119,151 +113,283 @@ function applySensorReadouts(snapshot: ModelSnapshot): void {
     `${snapshot.ax.toFixed(3)} / ${snapshot.ay.toFixed(3)} / ${snapshot.az.toFixed(3)} g`;
 }
 
-function drawLoop(): void {
-  drawAccel(els.accelCanvas, latestAccel.samples);
-  drawFft(els.fftCanvas, latestFft.freqs, latestFft.combinedDb);
-  requestAnimationFrame(drawLoop);
+class LiveCharts {
+  private readonly accel: ECharts;
+  private readonly fft: ECharts;
+
+  constructor(accelEl: HTMLElement, fftEl: HTMLElement) {
+    this.accel = init(accelEl, null, { renderer: "canvas" });
+    this.fft = init(fftEl, null, { renderer: "canvas" });
+
+    this.accel.setOption(createBaseOption({ yMin: -2, yMax: 2, unit: "g", showXAxisLabels: false }));
+    this.fft.setOption(createBaseOption({ unit: "dB", showXAxisLabels: true }));
+    this.updateAccel([]);
+    this.updateFft([], [], 0);
+
+    const resizeObserver = new ResizeObserver(() => {
+      this.accel.resize();
+      this.fft.resize();
+    });
+    resizeObserver.observe(accelEl);
+    resizeObserver.observe(fftEl);
+    window.addEventListener("resize", () => {
+      this.accel.resize();
+      this.fft.resize();
+    });
+  }
+
+  updateAccel(samples: number[]): void {
+    const count = Math.floor(samples.length / 3);
+    const xData: Array<[number, number]> = [];
+    const yData: Array<[number, number]> = [];
+    const zData: Array<[number, number]> = [];
+
+    for (let i = 0; i < count; i += 1) {
+      xData.push([i, samples[i * 3]]);
+      yData.push([i, samples[i * 3 + 1]]);
+      zData.push([i, samples[i * 3 + 2]]);
+    }
+
+    this.accel.setOption(
+      {
+        xAxis: { min: 0, max: Math.max(1, count - 1) },
+        series: [
+          createLineSeries("X", xData, "#e11d74"),
+          createLineSeries("Y", yData, "#7c3aed"),
+          createLineSeries("Z", zData, "#0ea5a4"),
+        ],
+      },
+      { lazyUpdate: true, silent: true },
+    );
+  }
+
+  updateFft(freqs: number[], db: number[], peakHz: number): void {
+    const data: Array<[number, number]> = [];
+    const count = Math.min(freqs.length, db.length);
+
+    for (let i = 0; i < count; i += 1) {
+      const freq = freqs[i];
+      const value = db[i];
+      if (Number.isFinite(freq) && Number.isFinite(value) && freq <= 1000) {
+        data.push([freq, value]);
+      }
+    }
+
+    this.fft.setOption(
+      {
+        yAxis: createAutoYAxis(data.map(([, value]) => value), "dB"),
+        series: [createFftSeries(data, peakHz)],
+      },
+      { lazyUpdate: true, silent: true },
+    );
+  }
 }
 
-function resizeCanvas(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
-  const rect = canvas.getBoundingClientRect();
-  const scale = Math.min(window.devicePixelRatio || 1, 2);
-  const width = Math.max(1, Math.floor(rect.width * scale));
-  const height = Math.max(1, Math.floor(rect.height * scale));
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
+function createFftSeries(data: Array<[number, number]>, peakHz: number): LineSeriesOption {
+  const series = createLineSeries("Combined", data, "#14161a");
+  const peak = findPeakPoint(data, peakHz);
+
+  if (!peak) {
+    return series;
   }
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Canvas 2D context unavailable");
-  }
-  ctx.setTransform(scale, 0, 0, scale, 0, 0);
-  return ctx;
+
+  return {
+    ...series,
+    markLine: {
+      animation: false,
+      silent: true,
+      symbol: "none",
+      data: [{ xAxis: peak[0] }],
+      label: {
+        show: true,
+        formatter: `${peak[0].toFixed(2)} Hz`,
+        color: "hsl(240 5.9% 10%)",
+        fontSize: 11,
+        fontWeight: 600,
+        position: "insideEndTop",
+        distance: 6,
+      },
+      lineStyle: {
+        color: "hsl(346 77% 49%)",
+        type: "dashed",
+        width: 1.5,
+      },
+    },
+    markPoint: {
+      animation: false,
+      silent: true,
+      symbol: "circle",
+      symbolSize: 8,
+      data: [{ name: "Peak", coord: peak }],
+      itemStyle: {
+        color: "hsl(346 77% 49%)",
+        borderColor: "hsl(0 0% 100%)",
+        borderWidth: 2,
+      },
+      label: { show: false },
+    },
+  };
 }
 
-function drawAccel(canvas: HTMLCanvasElement, samples: number[]): void {
-  const ctx = resizeCanvas(canvas);
-  const width = canvas.clientWidth;
-  const height = canvas.clientHeight;
-  clearChart(ctx, width, height);
-  drawGrid(ctx, width, height, "-2g", "2g");
-
-  if (samples.length < 6) {
-    return;
+function findPeakPoint(data: Array<[number, number]>, peakHz: number): [number, number] | null {
+  if (!Number.isFinite(peakHz) || peakHz <= 0 || data.length === 0) {
+    return null;
   }
 
-  const count = Math.floor(samples.length / 3);
-  drawSeries(ctx, width, height, count, (i) => samples[i * 3], -2, 2, "#111111");
-  drawSeries(ctx, width, height, count, (i) => samples[i * 3 + 1], -2, 2, "#2563eb");
-  drawSeries(ctx, width, height, count, (i) => samples[i * 3 + 2], -2, 2, "#b91c1c");
-  drawLegend(ctx, [["X", "#111111"], ["Y", "#2563eb"], ["Z", "#b91c1c"]]);
-}
+  let closest = data[0];
+  let closestDistance = Math.abs(data[0][0] - peakHz);
 
-function drawFft(canvas: HTMLCanvasElement, freqs: number[], db: number[]): void {
-  const ctx = resizeCanvas(canvas);
-  const width = canvas.clientWidth;
-  const height = canvas.clientHeight;
-  clearChart(ctx, width, height);
-  drawGrid(ctx, width, height, "-120 dB", "0 dB");
-
-  if (freqs.length < 2 || db.length < 2) {
-    return;
-  }
-
-  ctx.beginPath();
-  for (let i = 0; i < Math.min(freqs.length, db.length); i += 1) {
-    const x = 34 + (Math.min(freqs[i], 1000) / 1000) * (width - 48);
-    const y = 12 + ((0 - clamp(db[i], -120, 0)) / 120) * (height - 34);
-    if (i === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
+  for (let i = 1; i < data.length; i += 1) {
+    const distance = Math.abs(data[i][0] - peakHz);
+    if (distance < closestDistance) {
+      closest = data[i];
+      closestDistance = distance;
     }
   }
-  ctx.strokeStyle = "#111111";
-  ctx.lineWidth = 1.4;
-  ctx.stroke();
-  drawLegend(ctx, [["Combined", "#111111"]]);
+
+  return closest[0] <= 1000 ? closest : null;
 }
 
-function clearChart(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-  ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, width, height);
+function createBaseOption({
+  yMin,
+  yMax,
+  unit,
+  showXAxisLabels,
+}: {
+  yMin?: number;
+  yMax?: number;
+  unit: string;
+  showXAxisLabels: boolean;
+}): LiveChartOption {
+  return {
+    animation: false,
+    backgroundColor: "hsl(0 0% 100%)",
+    color: ["hsl(346 77% 49%)", "hsl(262 83% 58%)", "hsl(181 75% 35%)"],
+    grid: {
+      left: 38,
+      right: 14,
+      top: 12,
+      bottom: showXAxisLabels ? 28 : 18,
+      containLabel: true,
+    },
+    tooltip: {
+      trigger: "axis",
+      confine: true,
+      transitionDuration: 0,
+      axisPointer: {
+        type: "line",
+        lineStyle: { color: "hsl(240 3.8% 46.1%)", width: 1 },
+      },
+      backgroundColor: "hsl(0 0% 100%)",
+      borderColor: "hsl(240 5.9% 90%)",
+      textStyle: { color: "hsl(240 10% 3.9%)" },
+      valueFormatter: (value) => typeof value === "number" ? `${value.toFixed(2)} ${unit}` : String(value),
+    },
+    xAxis: {
+      type: "value",
+      min: 0,
+      max: showXAxisLabels ? 1000 : 1,
+      axisLabel: {
+        show: showXAxisLabels,
+        color: "hsl(240 3.8% 46.1%)",
+        fontSize: 11,
+      },
+      axisLine: { lineStyle: { color: "hsl(240 5.9% 90%)" } },
+      axisTick: { show: showXAxisLabels, lineStyle: { color: "hsl(240 5.9% 90%)" } },
+      splitLine: { lineStyle: { color: "hsl(240 5.9% 90%)" } },
+    },
+    yAxis: {
+      type: "value",
+      min: yMin,
+      max: yMax,
+      scale: yMin === undefined || yMax === undefined,
+      axisLabel: {
+        color: "hsl(240 3.8% 46.1%)",
+        fontSize: 11,
+        formatter: (value: number) => `${value}${unit === "g" ? "g" : ""}`,
+      },
+      axisLine: { show: true, lineStyle: { color: "hsl(240 5.9% 90%)" } },
+      axisTick: { show: true, lineStyle: { color: "hsl(240 5.9% 90%)" } },
+      splitLine: { lineStyle: { color: "hsl(240 5.9% 90%)" } },
+    },
+    series: [],
+  };
 }
 
-function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, minLabel: string, maxLabel: string): void {
-  const left = 34;
-  const right = width - 14;
-  const top = 12;
-  const bottom = height - 22;
-
-  ctx.strokeStyle = "#d8d8d8";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let i = 0; i <= 4; i += 1) {
-    const y = top + (i / 4) * (bottom - top);
-    ctx.moveTo(left, y);
-    ctx.lineTo(right, y);
+function createAutoYAxis(values: number[], unit: string): LiveChartOption["yAxis"] {
+  if (values.length === 0) {
+    return {
+      min: -120,
+      max: 0,
+      scale: true,
+    };
   }
-  for (let i = 0; i <= 4; i += 1) {
-    const x = left + (i / 4) * (right - left);
-    ctx.moveTo(x, top);
-    ctx.lineTo(x, bottom);
+
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+
+  if (min === max) {
+    const padding = Math.max(1, Math.abs(min) * 0.05);
+    min -= padding;
+    max += padding;
+  } else {
+    const padding = (max - min) * 0.08;
+    min -= padding;
+    max += padding;
   }
-  ctx.stroke();
 
-  ctx.strokeStyle = "#8b8b8b";
-  ctx.strokeRect(left, top, right - left, bottom - top);
-  ctx.fillStyle = "#555555";
-  ctx.font = "11px system-ui, sans-serif";
-  ctx.fillText(maxLabel, 6, top + 4);
-  ctx.fillText(minLabel, 6, bottom);
+  return {
+    min,
+    max,
+    scale: true,
+    axisLabel: {
+      color: "hsl(240 3.8% 46.1%)",
+      fontSize: 11,
+      formatter: (value: number) => `${value.toFixed(0)}${unit}`,
+    },
+  };
 }
 
-function drawSeries(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  count: number,
-  getValue: (index: number) => number,
-  min: number,
-  max: number,
-  color: string,
-): void {
-  const left = 34;
-  const top = 12;
-  const plotWidth = width - 48;
-  const plotHeight = height - 34;
+function createLineSeries(name: string, data: Array<[number, number]>, color: string): LineSeriesOption {
+  return {
+    name,
+    type: "line",
+    data,
+    showSymbol: false,
+    sampling: "lttb",
+    lineStyle: {
+      color,
+      width: name === "Combined" ? 1.4 : 1.25,
+    },
+    itemStyle: { color },
+    emphasis: { disabled: true },
+  };
+}
 
-  ctx.beginPath();
-  for (let i = 0; i < count; i += 1) {
-    const x = left + (i / Math.max(1, count - 1)) * plotWidth;
-    const normalized = (clamp(getValue(i), min, max) - min) / (max - min);
-    const y = top + (1 - normalized) * plotHeight;
-    if (i === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
-    }
+window.setInterval(() => {
+  if (pendingStatus) {
+    applyStatus(pendingStatus);
+    pendingStatus = null;
   }
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.15;
-  ctx.stroke();
-}
-
-function drawLegend(ctx: CanvasRenderingContext2D, items: Array<[string, string]>): void {
-  ctx.font = "11px system-ui, sans-serif";
-  let x = 42;
-  for (const [label, color] of items) {
-    ctx.fillStyle = color;
-    ctx.fillRect(x, 8, 14, 2);
-    ctx.fillText(label, x + 18, 12);
-    x += 56;
+  if (pendingFft) {
+    applyFftReadouts(pendingFft);
+    pendingFft = null;
   }
-}
+  if (pendingSensor) {
+    applySensorReadouts(pendingSensor);
+    pendingSensor = null;
+  }
+}, 50);
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
+charts = new LiveCharts(els.accelChart, els.fftChart);
+
+void invoke("start_stream").catch((error) => {
+  pendingStatus = {
+    state: "error",
+    detail: String(error),
+    sampleRateHz: 8000,
+    frameRateHz: 160,
+    sequenceGaps: 0,
+    resyncs: 0,
+  };
+});

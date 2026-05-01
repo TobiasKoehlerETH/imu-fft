@@ -19,6 +19,7 @@ pub const FRAME_RATE_HZ: f32 = 160.0;
 pub const GPM2_LSB_PER_G: f32 = 16384.0;
 const RING_CAPACITY: usize = dsp::FFT_SIZE * 2;
 const ACCEL_SNAPSHOT_SAMPLES: usize = 1000;
+const SIMULATED_AXIS_NOISE_G: f32 = 0.0001;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -459,10 +460,25 @@ fn simulated_sample(sample_index: usize) -> [f32; 3] {
     let t = sample_index as f32 / SAMPLE_RATE_HZ;
     let tau = 2.0 * std::f32::consts::PI;
     [
-        0.22 * (tau * 35.0 * t).sin() + 0.03 * (tau * 240.0 * t).sin(),
-        0.16 * (tau * 90.0 * t).sin(),
-        1.0 + 0.08 * (tau * 13.0 * t).sin() + 0.02 * (tau * 180.0 * t).sin(),
+        0.22 * (tau * 35.0 * t).sin() + simulated_axis_noise(sample_index, 0),
+        0.16 * (tau * 90.0 * t).sin() + simulated_axis_noise(sample_index, 1),
+        1.0 + 0.08 * (tau * 13.0 * t).sin() + simulated_axis_noise(sample_index, 2),
     ]
+}
+
+fn simulated_axis_noise(sample_index: usize, axis: u32) -> f32 {
+    let mut value = (sample_index as u32)
+        .wrapping_mul(747_796_405)
+        .wrapping_add(axis.wrapping_mul(2_891_336_453))
+        .wrapping_add(2_891_336_453);
+    value ^= value >> 16;
+    value = value.wrapping_mul(2_246_822_519);
+    value ^= value >> 13;
+    value = value.wrapping_mul(3_266_489_917);
+    value ^= value >> 16;
+
+    let normalized = value as f32 / u32::MAX as f32;
+    (normalized * 2.0 - 1.0) * SIMULATED_AXIS_NOISE_G
 }
 
 fn emit_status(app: &AppHandle, state: &str, detail: String, sequence_gaps: u64, resyncs: u64) {
@@ -604,6 +620,15 @@ mod tests {
         assert!((snapshot.roll - expected_roll).abs() < 1.0e-6);
         assert_eq!(snapshot.pitch, 0.0);
         assert!((snapshot.yaw - expected_yaw).abs() < 1.0e-6);
+    }
+
+    #[test]
+    fn simulated_axis_noise_stays_within_point_one_mg() {
+        for sample_index in 0..10_000 {
+            for axis in 0..3 {
+                assert!(simulated_axis_noise(sample_index, axis).abs() <= SIMULATED_AXIS_NOISE_G);
+            }
+        }
     }
 
     #[test]
