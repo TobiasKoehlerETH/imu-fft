@@ -25,9 +25,13 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["msi"],
+    "targets": [
+      "msi"
+    ],
     "createUpdaterArtifacts": true,
-    "icon": ["icons/icon.ico"]
+    "icon": [
+      "icons/icon.ico"
+    ]
   },
   "plugins": {
     "updater": {
