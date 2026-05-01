@@ -93,7 +93,10 @@ jobs:
         with:
           tagName: v${{ steps.version.outputs.app_version }}
           releaseName: IMU FFT v${{ steps.version.outputs.app_version }}
-          releaseBody: See the assets to download this version and install.
+          releaseBody: |
+            Download the Windows installer asset named `IMU.FFT_${{ steps.version.outputs.app_version }}_x64_en-US.msi`.
+
+            The `.sig` file and `latest.json` asset are used by the in-app auto updater and do not need to be downloaded manually.
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
