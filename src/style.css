@@ -359,6 +359,32 @@ button {
   cursor: default;
 }
 
+.icon-button {
+  width: 34px;
+  flex: 0 0 34px;
+  padding: 0;
+}
+
+.button-icon,
+.update-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.button-icon-svg,
+.update-icon-svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+}
+
+.update-icon {
+  color: hsl(var(--status-simulated));
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(360px, 0.95fr) minmax(460px, 1.35fr);

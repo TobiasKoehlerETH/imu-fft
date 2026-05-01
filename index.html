@@ -43,9 +43,12 @@
               </span>
               <span class="switch-label">Simulation</span>
             </label>
-            <button id="tare-button" class="ghost-button" type="button">Tare</button>
+            <button id="tare-button" class="ghost-button icon-button" type="button" aria-label="Tare" title="Tare">
+              <span id="tare-icon" class="button-icon" aria-hidden="true"></span>
+            </button>
             <div id="update-notice" class="update-notice" hidden>
-              <span id="update-text" class="update-text">Update available</span>
+              <span id="update-icon" class="update-icon" aria-hidden="true"></span>
+              <span id="update-text" class="update-text" aria-live="polite">Update available</span>
               <button id="update-install-button" class="ghost-button update-button" type="button">
                 Install
               </button>

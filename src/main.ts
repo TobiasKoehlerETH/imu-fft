@@ -13,6 +13,10 @@ import { GridComponent, MarkPointComponent, TooltipComponent } from "echarts/com
 import type { ComposeOption, ECharts } from "echarts/core";
 import { init, use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
+import type { IconNode } from "lucide";
+import createElement from "lucide/dist/esm/createElement.mjs";
+import Crosshair from "lucide/dist/esm/icons/crosshair.mjs";
+import Download from "lucide/dist/esm/icons/download.mjs";
 import { ModelSnapshot, ModelView } from "./model";
 import "./style.css";
 
@@ -72,11 +76,16 @@ const els = {
   fftChart: requireElement("fft-chart"),
   simulationToggle: requireInputElement("simulation-toggle"),
   tareButton: requireElement("tare-button"),
+  tareIcon: requireElement("tare-icon"),
   updateNotice: requireElement("update-notice"),
+  updateIcon: requireElement("update-icon"),
   updateText: requireElement("update-text"),
   updateInstallButton: requireButtonElement("update-install-button"),
   accelLegendItems: Array.from(document.querySelectorAll<HTMLElement>("[data-accel-axis]")),
 };
+
+mountIcon(els.tareIcon, Crosshair, "button-icon-svg");
+mountIcon(els.updateIcon, Download, "update-icon-svg");
 
 els.tareButton.addEventListener("click", () => model.tare());
 els.simulationToggle.addEventListener("change", () => {
@@ -123,6 +132,15 @@ function requireButtonElement(id: string): HTMLButtonElement {
     throw new Error(`Missing button element: ${id}`);
   }
   return element;
+}
+
+function mountIcon(target: HTMLElement, icon: IconNode, className: string): void {
+  const svg = createElement(icon, {
+    class: className,
+    "aria-hidden": "true",
+  });
+  svg.setAttribute("focusable", "false");
+  target.replaceChildren(svg);
 }
 
 function applyStatus(snapshot: StatusSnapshot): void {

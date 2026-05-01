@@ -1,6 +1,6 @@
 {
   "name": "imu-fft",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,6 +17,7 @@
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "echarts": "^6.0.0",
+    "lucide": "^1.14.0",
     "three": "^0.176.0"
   },
   "devDependencies": {
