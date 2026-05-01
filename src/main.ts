@@ -15,8 +15,8 @@ import { init, use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import type { IconNode } from "lucide";
 import createElement from "lucide/dist/esm/createElement.mjs";
-import Crosshair from "lucide/dist/esm/icons/crosshair.mjs";
 import Download from "lucide/dist/esm/icons/download.mjs";
+import RefreshCcw from "lucide/dist/esm/icons/refresh-ccw.mjs";
 import { ModelSnapshot, ModelView } from "./model";
 import "./style.css";
 
@@ -84,7 +84,7 @@ const els = {
   accelLegendItems: Array.from(document.querySelectorAll<HTMLElement>("[data-accel-axis]")),
 };
 
-mountIcon(els.tareIcon, Crosshair, "button-icon-svg");
+mountIcon(els.tareIcon, RefreshCcw, "button-icon-svg");
 mountIcon(els.updateIcon, Download, "update-icon-svg");
 
 els.tareButton.addEventListener("click", () => model.tare());
@@ -145,8 +145,11 @@ function mountIcon(target: HTMLElement, icon: IconNode, className: string): void
 
 function applyStatus(snapshot: StatusSnapshot): void {
   els.statusDot.className = `status-dot ${snapshot.state}`;
-  els.statusText.textContent = snapshot.state[0].toUpperCase() + snapshot.state.slice(1);
-  els.detailText.textContent = snapshot.detail;
+  const isSearching = snapshot.state === "searching";
+  els.statusText.textContent = isSearching
+    ? "no sensor connected"
+    : snapshot.state[0].toUpperCase() + snapshot.state.slice(1);
+  els.detailText.textContent = isSearching ? "" : snapshot.detail;
 }
 
 function applyFftReadouts(snapshot: FftSnapshot): void {
@@ -180,7 +183,7 @@ function setSimulationEnabled(enabled: boolean): void {
     clearDisplayedData();
     pendingStatus = {
       state: "searching",
-      detail: "Waiting for serial port",
+      detail: "",
       sampleRateHz: 8000,
       frameRateHz: 160,
       sequenceGaps: 0,
@@ -628,14 +631,14 @@ function normalizeStatus(snapshot: StatusSnapshot): StatusSnapshot {
   return {
     ...snapshot,
     state: "searching",
-    detail: "Waiting for serial port",
+    detail: "",
   };
 }
 
 function startBrowserPreview(): void {
   pendingStatus = {
     state: "searching",
-    detail: "Waiting for serial port",
+    detail: "",
     sampleRateHz: 8000,
     frameRateHz: 160,
     sequenceGaps: 0,

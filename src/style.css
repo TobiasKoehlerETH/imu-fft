@@ -120,7 +120,7 @@ button {
   height: 34px;
   padding: 0 11px;
   color: hsl(var(--secondary-foreground));
-  background: hsl(var(--secondary));
+  background: transparent;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
 }
@@ -135,6 +135,10 @@ button {
   color: hsl(var(--muted-foreground));
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.status-detail:empty {
+  display: none;
 }
 
 .status-dot {
@@ -269,7 +273,7 @@ button {
   height: 34px;
   padding: 0 10px;
   color: hsl(var(--secondary-foreground));
-  background: hsl(var(--secondary));
+  background: transparent;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   cursor: pointer;
@@ -291,18 +295,19 @@ button {
   width: 34px;
   height: 18px;
   flex: 0 0 auto;
-  background: hsl(var(--muted-foreground) / 0.32);
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
   border-radius: 999px;
   transition: background 120ms ease;
 }
 
 .switch-thumb {
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 1px;
+  left: 1px;
   width: 14px;
   height: 14px;
-  background: hsl(var(--background));
+  background: hsl(var(--muted-foreground));
   border-radius: 999px;
   box-shadow: 0 1px 2px hsl(var(--foreground) / 0.25);
   transition: transform 120ms ease;
@@ -315,6 +320,11 @@ button {
 
 .switch-control:has(input:checked) .switch-track {
   background: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+}
+
+.switch-control:has(input:checked) .switch-thumb {
+  background: hsl(var(--primary-foreground));
 }
 
 .switch-control:has(input:checked) .switch-thumb {
@@ -334,7 +344,7 @@ button {
   height: 34px;
   padding: 0 12px;
   color: hsl(var(--secondary-foreground));
-  background: hsl(var(--secondary));
+  background: transparent;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   cursor: pointer;
@@ -346,7 +356,7 @@ button {
 }
 
 .ghost-button:hover:not([disabled]) {
-  background: hsl(var(--accent));
+  background: hsl(var(--primary) / 0.05);
   color: hsl(var(--accent-foreground));
 }
 

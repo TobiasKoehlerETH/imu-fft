@@ -303,7 +303,7 @@ fn run_serial_worker(app: AppHandle, stop: Arc<AtomicBool>, simulation_enabled: 
                 emit_status(
                     &app,
                     "searching",
-                    "Waiting for serial port".to_string(),
+                    String::new(),
                     sequence_gaps,
                     resyncs,
                 );
