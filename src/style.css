@@ -59,6 +59,10 @@ select {
   font: inherit;
 }
 
+button {
+  color: inherit;
+}
+
 #app {
   display: grid;
   grid-template-rows: 56px 1fr;
@@ -227,6 +231,70 @@ select {
   gap: 8px;
 }
 
+.switch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  color: hsl(var(--secondary-foreground));
+  background: hsl(var(--secondary));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  cursor: pointer;
+  user-select: none;
+}
+
+.switch-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.switch-track {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  flex: 0 0 auto;
+  background: hsl(var(--muted-foreground) / 0.32);
+  border-radius: 999px;
+  transition: background 120ms ease;
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: hsl(var(--background));
+  border-radius: 999px;
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.25);
+  transition: transform 120ms ease;
+}
+
+.switch-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.switch-control:has(input:checked) .switch-track {
+  background: hsl(var(--primary));
+}
+
+.switch-control:has(input:checked) .switch-thumb {
+  transform: translateX(16px);
+}
+
+.switch-control:has(input:focus-visible) {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.18);
+}
+
 .ghost-button {
   appearance: none;
   display: inline-flex;
@@ -346,8 +414,36 @@ select {
 }
 
 .legend-item {
+  appearance: none;
   gap: 5px;
+  padding: 2px 3px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+  cursor: pointer;
   font-weight: 500;
+  transition:
+    color 120ms ease,
+    opacity 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.legend-item:hover {
+  color: hsl(var(--foreground));
+}
+
+.legend-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.16);
+}
+
+.legend-item.is-hidden {
+  opacity: 0.42;
+}
+
+.legend-item.is-hidden .legend-dot {
+  background: hsl(var(--muted-foreground)) !important;
 }
 
 .legend-dot {
@@ -423,7 +519,8 @@ select {
   }
 
   .top-readout,
-  .ghost-button {
+  .ghost-button,
+  .switch-control {
     width: 100%;
   }
 }

@@ -20,6 +20,7 @@ pub const GPM2_LSB_PER_G: f32 = 16384.0;
 const RING_CAPACITY: usize = dsp::FFT_SIZE * 2;
 const ACCEL_SNAPSHOT_SAMPLES: usize = 1000;
 const SIMULATED_AXIS_NOISE_G: f32 = 0.001;
+const SERIAL_RETRY_INTERVAL: Duration = Duration::from_secs(3);
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -226,6 +227,7 @@ struct WorkerState {
 
 pub struct StreamController {
     worker: Mutex<WorkerState>,
+    simulation_enabled: Arc<AtomicBool>,
 }
 
 impl StreamController {
@@ -235,6 +237,7 @@ impl StreamController {
                 stop: None,
                 handle: None,
             }),
+            simulation_enabled: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -250,10 +253,15 @@ impl StreamController {
 
         let stop = Arc::new(AtomicBool::new(false));
         let thread_stop = stop.clone();
-        let handle = thread::spawn(move || run_serial_worker(app, thread_stop));
+        let simulation_enabled = self.simulation_enabled.clone();
+        let handle = thread::spawn(move || run_serial_worker(app, thread_stop, simulation_enabled));
         worker.stop = Some(stop);
         worker.handle = Some(handle);
         Ok(())
+    }
+
+    pub fn set_simulation_enabled(&self, enabled: bool) {
+        self.simulation_enabled.store(enabled, Ordering::Relaxed);
     }
 
     pub fn stop(&self) -> Result<(), String> {
@@ -268,7 +276,7 @@ impl StreamController {
     }
 }
 
-fn run_serial_worker(app: AppHandle, stop: Arc<AtomicBool>) {
+fn run_serial_worker(app: AppHandle, stop: Arc<AtomicBool>, simulation_enabled: Arc<AtomicBool>) {
     let mut sequence_gaps = 0;
     let mut resyncs = 0;
 
@@ -276,18 +284,35 @@ fn run_serial_worker(app: AppHandle, stop: Arc<AtomicBool>) {
         let ports = match serialport::available_ports() {
             Ok(ports) => ports,
             Err(err) => {
-                emit_status(&app, "error", format!("Serial scan failed: {err}"), sequence_gaps, resyncs);
-                sleep_or_stop(&stop, Duration::from_secs(1));
+                emit_status(
+                    &app,
+                    "error",
+                    format!("Serial scan failed: {err}"),
+                    sequence_gaps,
+                    resyncs,
+                );
+                sleep_or_stop(&stop, SERIAL_RETRY_INTERVAL);
                 continue;
             }
         };
 
-        let Some(port_info) = ports.first() else {
-            run_simulator(&app, &stop, sequence_gaps, resyncs);
+        let Some(port_info) = first_serial_port(ports) else {
+            if simulation_enabled.load(Ordering::Relaxed) {
+                run_simulator(&app, &stop, &simulation_enabled, sequence_gaps, resyncs);
+            } else {
+                emit_status(
+                    &app,
+                    "searching",
+                    "Waiting for serial port".to_string(),
+                    sequence_gaps,
+                    resyncs,
+                );
+                sleep_or_stop(&stop, SERIAL_RETRY_INTERVAL);
+            }
             continue;
         };
 
-        let port_name = port_info.port_name.clone();
+        let port_name = port_info.port_name;
         let mut port = match serialport::new(&port_name, BAUD_RATE)
             .timeout(Duration::from_millis(20))
             .data_bits(serialport::DataBits::Eight)
@@ -305,7 +330,7 @@ fn run_serial_worker(app: AppHandle, stop: Arc<AtomicBool>) {
                     sequence_gaps,
                     resyncs,
                 );
-                sleep_or_stop(&stop, Duration::from_secs(1));
+                sleep_or_stop(&stop, SERIAL_RETRY_INTERVAL);
                 continue;
             }
         };
@@ -389,6 +414,18 @@ fn run_serial_worker(app: AppHandle, stop: Arc<AtomicBool>) {
     }
 }
 
+fn first_serial_port(
+    mut ports: Vec<serialport::SerialPortInfo>,
+) -> Option<serialport::SerialPortInfo> {
+    if let Some(index) = ports
+        .iter()
+        .position(|port| port.port_name.to_ascii_uppercase().starts_with("COM"))
+    {
+        return Some(ports.remove(index));
+    }
+    ports.into_iter().next()
+}
+
 fn sleep_or_stop(stop: &AtomicBool, duration: Duration) {
     let start = Instant::now();
     while start.elapsed() < duration && !stop.load(Ordering::Relaxed) {
@@ -396,7 +433,13 @@ fn sleep_or_stop(stop: &AtomicBool, duration: Duration) {
     }
 }
 
-fn run_simulator(app: &AppHandle, stop: &AtomicBool, sequence_gaps: u64, resyncs: u64) {
+fn run_simulator(
+    app: &AppHandle,
+    stop: &AtomicBool,
+    simulation_enabled: &AtomicBool,
+    sequence_gaps: u64,
+    resyncs: u64,
+) {
     let mut ring = SampleRing::new(RING_CAPACITY);
     let mut sample_index = 0usize;
     let mut latest = [0.0_f32; 3];
@@ -407,13 +450,13 @@ fn run_simulator(app: &AppHandle, stop: &AtomicBool, sequence_gaps: u64, resyncs
     let mut last_scan = Instant::now();
 
     loop {
-        if stop.load(Ordering::Relaxed) {
+        if stop.load(Ordering::Relaxed) || !simulation_enabled.load(Ordering::Relaxed) {
             return;
         }
 
-        if last_scan.elapsed() >= Duration::from_secs(1) {
+        if last_scan.elapsed() >= SERIAL_RETRY_INTERVAL {
             if serialport::available_ports()
-                .map(|ports| !ports.is_empty())
+                .map(|ports| first_serial_port(ports).is_some())
                 .unwrap_or(false)
             {
                 return;
@@ -444,13 +487,7 @@ fn run_simulator(app: &AppHandle, stop: &AtomicBool, sequence_gaps: u64, resyncs
         }
 
         if now.duration_since(last_status) >= Duration::from_millis(500) {
-            emit_status(
-                app,
-                "simulated",
-                "No serial sensor found; showing simulated data".to_string(),
-                sequence_gaps,
-                resyncs,
-            );
+            emit_status(app, "simulated", String::new(), sequence_gaps, resyncs);
             last_status = now;
         }
 

@@ -26,6 +26,6 @@
   "bundle": {
     "active": true,
     "targets": ["msi"],
-    "icon": ["../public/AP.ico"]
+    "icon": ["icons/icon.ico"]
   }
 }

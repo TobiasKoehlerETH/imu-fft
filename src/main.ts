@@ -46,6 +46,15 @@ type FftSnapshot = {
   peakAxis: "x" | "y" | "z";
 };
 
+type AccelAxis = "x" | "y" | "z";
+type AxisLabelOption = {
+  color: string;
+  fontSize: number;
+  formatter: (value: number) => string;
+};
+
+const accelAxes = ["x", "y", "z"] as const;
+
 const els = {
   statusDot: requireElement("status-dot"),
   statusText: requireElement("status-text"),
@@ -59,15 +68,22 @@ const els = {
   modelView: requireElement("model-view"),
   accelChart: requireElement("accel-chart"),
   fftChart: requireElement("fft-chart"),
+  simulationToggle: requireInputElement("simulation-toggle"),
   tareButton: requireElement("tare-button"),
+  accelLegendItems: Array.from(document.querySelectorAll<HTMLElement>("[data-accel-axis]")),
 };
 
 els.tareButton.addEventListener("click", () => model.tare());
+els.simulationToggle.addEventListener("change", () => {
+  setSimulationEnabled(els.simulationToggle.checked);
+});
 
 let latestModel: ModelSnapshot = { ax: 0, ay: 0, az: 0, roll: 0, pitch: 0, yaw: 0 };
 let pendingStatus: StatusSnapshot | null = null;
 let pendingFft: FftSnapshot | null = null;
 let pendingSensor: ModelSnapshot | null = null;
+let simulationEnabled = false;
+let currentStreamState: StatusSnapshot["state"] = "searching";
 
 const model = new ModelView(els.modelView, (rate) => {
   els.modelRate.textContent = `${rate.toFixed(0)} Hz`;
@@ -78,6 +94,14 @@ function requireElement(id: string): HTMLElement {
   const element = document.getElementById(id);
   if (!element) {
     throw new Error(`Missing element: ${id}`);
+  }
+  return element;
+}
+
+function requireInputElement(id: string): HTMLInputElement {
+  const element = document.getElementById(id);
+  if (!(element instanceof HTMLInputElement)) {
+    throw new Error(`Missing input element: ${id}`);
   }
   return element;
 }
@@ -99,17 +123,68 @@ function applySensorReadouts(snapshot: ModelSnapshot): void {
   els.headAz.textContent = snapshot.az.toFixed(3);
 }
 
+function setSimulationEnabled(enabled: boolean): void {
+  simulationEnabled = enabled;
+
+  if (window.__TAURI_INTERNALS__) {
+    void invoke("set_simulation_enabled", { enabled }).catch((error) => {
+      pendingStatus = {
+        state: "error",
+        detail: String(error),
+        sampleRateHz: 8000,
+        frameRateHz: 160,
+        sequenceGaps: 0,
+        resyncs: 0,
+      };
+    });
+  }
+
+  if (!enabled && currentStreamState !== "live") {
+    clearDisplayedData();
+    pendingStatus = {
+      state: "searching",
+      detail: "Waiting for serial port",
+      sampleRateHz: 8000,
+      frameRateHz: 160,
+      sequenceGaps: 0,
+      resyncs: 0,
+    };
+  } else if (enabled && !window.__TAURI_INTERNALS__ && currentStreamState !== "live") {
+    pendingStatus = {
+      state: "simulated",
+      detail: "Browser preview; open the Tauri app for serial streaming",
+      sampleRateHz: 8000,
+      frameRateHz: 160,
+      sequenceGaps: 0,
+      resyncs: 0,
+    };
+  }
+}
+
+function shouldDisplayData(): boolean {
+  return currentStreamState !== "simulated" || simulationEnabled;
+}
+
+function clearDisplayedData(): void {
+  charts?.updateAccel([]);
+  charts?.updateFft([], []);
+  latestModel = { ax: 0, ay: 0, az: 0, roll: 0, pitch: 0, yaw: 0 };
+  model.applySnapshot(latestModel);
+  pendingFft = { freqs: [], combinedDb: [], peakHz: 0, peakAxis: "x" };
+  pendingSensor = latestModel;
+}
+
 class LiveCharts {
   private readonly accel: ECharts;
   private readonly fft: ECharts;
+  private readonly hiddenAccelAxes = new Set<AccelAxis>();
+  private latestAccelSamples: number[] = [];
 
   constructor(accelEl: HTMLElement, fftEl: HTMLElement) {
     this.accel = init(accelEl, null, { renderer: "canvas" });
     this.fft = init(fftEl, null, { renderer: "canvas" });
 
     this.accel.setOption(createBaseOption({
-      yMin: -2,
-      yMax: 2,
       unit: "g",
       showXAxisLabels: true,
       xAxisName: "Sample",
@@ -136,25 +211,55 @@ class LiveCharts {
     });
   }
 
+  isAccelAxisVisible(axis: AccelAxis): boolean {
+    return !this.hiddenAccelAxes.has(axis);
+  }
+
+  setAccelAxisVisible(axis: AccelAxis, visible: boolean): void {
+    if (visible) {
+      this.hiddenAccelAxes.delete(axis);
+    } else {
+      this.hiddenAccelAxes.add(axis);
+    }
+    this.updateAccel(this.latestAccelSamples);
+  }
+
   updateAccel(samples: number[]): void {
+    this.latestAccelSamples = samples;
     const count = Math.floor(samples.length / 3);
     const xData: Array<[number, number]> = [];
     const yData: Array<[number, number]> = [];
     const zData: Array<[number, number]> = [];
+    const visibleValues: number[] = [];
 
     for (let i = 0; i < count; i += 1) {
-      xData.push([i, samples[i * 3]]);
-      yData.push([i, samples[i * 3 + 1]]);
-      zData.push([i, samples[i * 3 + 2]]);
+      const x = samples[i * 3];
+      const y = samples[i * 3 + 1];
+      const z = samples[i * 3 + 2];
+
+      xData.push([i, x]);
+      yData.push([i, y]);
+      zData.push([i, z]);
+
+      if (this.isAccelAxisVisible("x") && Number.isFinite(x)) {
+        visibleValues.push(x);
+      }
+      if (this.isAccelAxisVisible("y") && Number.isFinite(y)) {
+        visibleValues.push(y);
+      }
+      if (this.isAccelAxisVisible("z") && Number.isFinite(z)) {
+        visibleValues.push(z);
+      }
     }
 
     this.accel.setOption(
       {
         xAxis: { min: 0, max: Math.max(1, count - 1) },
+        yAxis: createAutoYAxis(visibleValues, "g"),
         series: [
-          createLineSeries("X", xData, "#e11d74"),
-          createLineSeries("Y", yData, "#7c3aed"),
-          createLineSeries("Z", zData, "#0ea5a4"),
+          createLineSeries("X", this.isAccelAxisVisible("x") ? xData : [], "#e11d74"),
+          createLineSeries("Y", this.isAccelAxisVisible("y") ? yData : [], "#7c3aed"),
+          createLineSeries("Z", this.isAccelAxisVisible("z") ? zData : [], "#0ea5a4"),
         ],
       },
       { lazyUpdate: true, silent: true },
@@ -185,6 +290,26 @@ class LiveCharts {
       { lazyUpdate: true, silent: true },
     );
   }
+}
+
+function setupAccelLegend(chartSet: LiveCharts): void {
+  for (const item of els.accelLegendItems) {
+    const axis = item.dataset.accelAxis;
+    if (!isAccelAxis(axis)) {
+      continue;
+    }
+
+    item.addEventListener("click", () => {
+      const visible = !chartSet.isAccelAxisVisible(axis);
+      chartSet.setAccelAxisVisible(axis, visible);
+      item.classList.toggle("is-hidden", !visible);
+      item.setAttribute("aria-pressed", String(visible));
+    });
+  }
+}
+
+function isAccelAxis(value: string | undefined): value is AccelAxis {
+  return accelAxes.some((axis) => axis === value);
 }
 
 function createFftSeries(
@@ -229,7 +354,7 @@ function createBaseOption({
     backgroundColor: "hsl(0 0% 100%)",
     color: ["hsl(346 77% 49%)", "hsl(262 83% 58%)", "hsl(181 75% 35%)"],
     grid: {
-      left: 52,
+      left: 76,
       right: 16,
       top: 16,
       bottom: 38,
@@ -272,7 +397,7 @@ function createBaseOption({
       scale: yMin === undefined || yMax === undefined,
       name: yAxisName,
       nameLocation: "middle",
-      nameGap: 38,
+      nameGap: 56,
       nameTextStyle: axisNameStyle,
       axisLabel: {
         color: "hsl(240 3.8% 46.1%)",
@@ -289,10 +414,11 @@ function createBaseOption({
 
 function createAutoYAxis(values: number[], unit: string): LiveChartOption["yAxis"] {
   if (values.length === 0) {
+    const emptyRange = unit === "g" ? { min: -2, max: 2 } : { min: -120, max: 0 };
     return {
-      min: -120,
-      max: 0,
+      ...emptyRange,
       scale: true,
+      axisLabel: createYAxisLabel(unit),
     };
   }
 
@@ -300,11 +426,12 @@ function createAutoYAxis(values: number[], unit: string): LiveChartOption["yAxis
   let max = Math.max(...values);
 
   if (min === max) {
-    const padding = Math.max(1, Math.abs(min) * 0.05);
+    const padding = unit === "g" ? Math.max(0.01, Math.abs(min) * 0.02) : Math.max(1, Math.abs(min) * 0.05);
     min -= padding;
     max += padding;
   } else {
-    const padding = (max - min) * 0.08;
+    const span = max - min;
+    const padding = unit === "g" ? Math.max(0.005, span * 0.25) : span * 0.08;
     min -= padding;
     max += padding;
   }
@@ -313,11 +440,15 @@ function createAutoYAxis(values: number[], unit: string): LiveChartOption["yAxis
     min,
     max,
     scale: true,
-    axisLabel: {
-      color: "hsl(240 3.8% 46.1%)",
-      fontSize: 11,
-      formatter: (value: number) => `${value.toFixed(0)}${unit}`,
-    },
+    axisLabel: createYAxisLabel(unit),
+  };
+}
+
+function createYAxisLabel(unit: string): AxisLabelOption {
+  return {
+    color: "hsl(240 3.8% 46.1%)",
+    fontSize: 11,
+    formatter: (value: number) => unit === "g" ? `${value.toFixed(2)}g` : `${value.toFixed(0)}${unit}`,
   };
 }
 
@@ -339,16 +470,26 @@ function createLineSeries(name: string, data: Array<[number, number]>, color: st
 
 function startTauriStream(): void {
   void listen<StatusSnapshot>("status", (event) => {
-    pendingStatus = event.payload;
+    currentStreamState = event.payload.state;
+    pendingStatus = normalizeStatus(event.payload);
   });
   void listen<AccelSnapshot>("accel", (event) => {
+    if (!shouldDisplayData()) {
+      return;
+    }
     charts?.updateAccel(event.payload.samples);
   });
   void listen<FftSnapshot>("fft", (event) => {
+    if (!shouldDisplayData()) {
+      return;
+    }
     charts?.updateFft(event.payload.freqs, event.payload.combinedDb);
     pendingFft = event.payload;
   });
   void listen<ModelSnapshot>("model", (event) => {
+    if (!shouldDisplayData()) {
+      return;
+    }
     latestModel = event.payload;
     model.applySnapshot(latestModel);
     pendingSensor = latestModel;
@@ -366,10 +507,22 @@ function startTauriStream(): void {
   });
 }
 
+function normalizeStatus(snapshot: StatusSnapshot): StatusSnapshot {
+  if (snapshot.state !== "simulated" || simulationEnabled) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    state: "searching",
+    detail: "Waiting for serial port",
+  };
+}
+
 function startBrowserPreview(): void {
   pendingStatus = {
-    state: "simulated",
-    detail: "Browser preview; open the Tauri app for serial streaming",
+    state: "searching",
+    detail: "Waiting for serial port",
     sampleRateHz: 8000,
     frameRateHz: 160,
     sequenceGaps: 0,
@@ -378,6 +531,11 @@ function startBrowserPreview(): void {
 
   let sampleIndex = 0;
   window.setInterval(() => {
+    currentStreamState = simulationEnabled ? "simulated" : "searching";
+    if (!simulationEnabled) {
+      return;
+    }
+
     const samples: number[] = [];
     let latest: [number, number, number] = [0, 0, 1];
 
@@ -394,6 +552,10 @@ function startBrowserPreview(): void {
   }, 50);
 
   window.setInterval(() => {
+    if (!simulationEnabled) {
+      return;
+    }
+
     const snapshot = simulatedFftSnapshot();
     charts?.updateFft(snapshot.freqs, snapshot.combinedDb);
     pendingFft = snapshot;
@@ -459,6 +621,7 @@ window.setInterval(() => {
 }, 50);
 
 charts = new LiveCharts(els.accelChart, els.fftChart);
+setupAccelLegend(charts);
 
 if (window.__TAURI_INTERNALS__) {
   startTauriStream();

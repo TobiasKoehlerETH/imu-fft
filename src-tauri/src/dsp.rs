@@ -81,11 +81,10 @@ pub fn analyze_fft(samples: &[[f32; 3]]) -> Option<FftResult> {
             break;
         }
 
-        let combined_amp = ((axis_amp[0][bin].powi(2)
-            + axis_amp[1][bin].powi(2)
-            + axis_amp[2][bin].powi(2))
-            / 3.0)
-            .sqrt();
+        let combined_amp =
+            ((axis_amp[0][bin].powi(2) + axis_amp[1][bin].powi(2) + axis_amp[2][bin].powi(2))
+                / 3.0)
+                .sqrt();
         let db = 20.0 * ((combined_amp / 8.0).max(1.0e-12)).log10();
 
         freqs.push(freq);
@@ -139,7 +138,8 @@ mod tests {
     fn sine_samples(freq: f32, axis: usize, amp: f32) -> Vec<[f32; 3]> {
         (0..FFT_SIZE)
             .map(|i| {
-                let value = amp * (2.0 * std::f32::consts::PI * freq * i as f32 / SAMPLE_RATE_HZ).sin();
+                let value =
+                    amp * (2.0 * std::f32::consts::PI * freq * i as f32 / SAMPLE_RATE_HZ).sin();
                 let mut sample = [0.0; 3];
                 sample[axis] = value;
                 sample
@@ -168,7 +168,14 @@ mod tests {
         let result = analyze_fft(&samples).unwrap();
         assert!((result.peak_hz - 125.0).abs() < 1.0);
         assert_eq!(result.peak_axis, "y");
-        assert!(result.combined_db.iter().copied().fold(f32::NEG_INFINITY, f32::max) > -30.0);
+        assert!(
+            result
+                .combined_db
+                .iter()
+                .copied()
+                .fold(f32::NEG_INFINITY, f32::max)
+                > -30.0
+        );
     }
 
     #[test]

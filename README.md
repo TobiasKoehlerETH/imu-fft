@@ -2,14 +2,35 @@
 
 Minimal Tauri 2 app for the ICM-42688-P firmware UART stream.
 
-## Run
+## Launch the Desktop App
 
 ```powershell
 npm install
 npm run dev
 ```
 
+`npm run dev` starts the Vite frontend on `http://127.0.0.1:1420` and opens the Tauri desktop window. On Windows, you can also double-click `dev.bat` from the repo root to run the same development app.
+
 The app opens the first detected serial port at `921600` baud, clears the input buffer, and listens for binary `0xAA 0x55` frames. It does not send serial commands. If no serial port is present, the interface runs on bounded simulated data and keeps checking for a real sensor.
+
+## Package the Desktop App
+
+```powershell
+npm install
+npm run build:tauri
+```
+
+This builds the frontend, compiles the Tauri app in release mode, and creates a Windows MSI installer because `src-tauri/tauri.conf.json` sets `bundle.targets` to `["msi"]`. The packaged installer is written under:
+
+```text
+src-tauri/target/release/bundle/msi/
+```
+
+After packaging, the release executable is also available at:
+
+```text
+src-tauri/target/release/imu-fft.exe
+```
 
 ## Verify
 

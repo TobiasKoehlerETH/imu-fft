@@ -36,6 +36,13 @@
             </div>
           </div>
           <div class="topbar-controls">
+            <label class="switch-control" for="simulation-toggle">
+              <input id="simulation-toggle" type="checkbox" />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+              <span class="switch-label">Simulation</span>
+            </label>
             <button id="tare-button" class="ghost-button" type="button">Tare</button>
           </div>
         </div>
@@ -55,9 +62,15 @@
             <div class="panel-title">
               <span class="panel-title-label">Accelerometer</span>
               <div class="legend">
-                <span class="legend-item"><span class="legend-dot" style="background:#e11d74"></span>X</span>
-                <span class="legend-item"><span class="legend-dot" style="background:#7c3aed"></span>Y</span>
-                <span class="legend-item"><span class="legend-dot" style="background:#0ea5a4"></span>Z</span>
+                <button class="legend-item" type="button" data-accel-axis="x" aria-pressed="true">
+                  <span class="legend-dot" style="background:#e11d74"></span>X
+                </button>
+                <button class="legend-item" type="button" data-accel-axis="y" aria-pressed="true">
+                  <span class="legend-dot" style="background:#7c3aed"></span>Y
+                </button>
+                <button class="legend-item" type="button" data-accel-axis="z" aria-pressed="true">
+                  <span class="legend-dot" style="background:#0ea5a4"></span>Z
+                </button>
                 <span class="panel-title-tag">8 kHz</span>
               </div>
             </div>
@@ -69,7 +82,6 @@
                 <span class="panel-title-label">FFT</span>
                 <span class="badge badge-peak">Peak</span>
               </span>
-              <span class="panel-title-tag">0–1000 Hz</span>
             </div>
             <div id="fft-chart" class="live-chart"></div>
           </div>
