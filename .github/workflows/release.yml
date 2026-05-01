@@ -69,6 +69,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --tags origin
 
           git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
           if (-not (git diff --cached --quiet)) {
@@ -76,12 +77,12 @@ jobs:
             git push origin "HEAD:${{ github.ref_name }}"
           }
 
-          if (git rev-parse -q --verify "refs/tags/$tag") {
-            Write-Host "Tag $tag already exists locally"
+          if (git ls-remote --exit-code --tags origin $tag) {
+            Write-Host "Tag $tag already exists on origin"
           } else {
             git tag $tag
+            git push origin $tag
           }
-          git push origin $tag
 
       - name: Build and publish Tauri release
         uses: tauri-apps/tauri-action@action-v0.6.2
@@ -95,5 +96,5 @@ jobs:
           releaseBody: See the assets to download this version and install.
           releaseDraft: false
           prerelease: false
-          uploadUpdaterJson: true
+          includeUpdaterJson: true
           updaterJsonPreferNsis: false
