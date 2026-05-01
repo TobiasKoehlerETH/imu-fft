@@ -2,17 +2,23 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { LineSeriesOption } from "echarts/charts";
 import { LineChart } from "echarts/charts";
-import type { GridComponentOption, TooltipComponentOption } from "echarts/components";
-import { GridComponent, TooltipComponent } from "echarts/components";
+import type {
+  GridComponentOption,
+  MarkPointComponentOption,
+  TooltipComponentOption,
+} from "echarts/components";
+import { GridComponent, MarkPointComponent, TooltipComponent } from "echarts/components";
 import type { ComposeOption, ECharts } from "echarts/core";
 import { init, use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { ModelSnapshot, ModelView } from "./model";
 import "./style.css";
 
-use([LineChart, GridComponent, TooltipComponent, CanvasRenderer]);
+use([LineChart, GridComponent, MarkPointComponent, TooltipComponent, CanvasRenderer]);
 
-type LiveChartOption = ComposeOption<GridComponentOption | TooltipComponentOption | LineSeriesOption>;
+type LiveChartOption = ComposeOption<
+  GridComponentOption | TooltipComponentOption | MarkPointComponentOption | LineSeriesOption
+>;
 
 declare global {
   interface Window {
@@ -49,16 +55,14 @@ const els = {
   headAx: requireElement("head-ax"),
   headAy: requireElement("head-ay"),
   headAz: requireElement("head-az"),
-  freqReadout: requireElement("freq-readout"),
-  axisReadout: requireElement("axis-readout"),
-  sensorReadout: requireElement("sensor-readout"),
-  rateReadout: requireElement("rate-readout"),
-  healthReadout: requireElement("health-readout"),
   modelRate: requireElement("model-rate"),
   modelView: requireElement("model-view"),
   accelChart: requireElement("accel-chart"),
   fftChart: requireElement("fft-chart"),
+  tareButton: requireElement("tare-button"),
 };
+
+els.tareButton.addEventListener("click", () => model.tare());
 
 let latestModel: ModelSnapshot = { ax: 0, ay: 0, az: 0, roll: 0, pitch: 0, yaw: 0 };
 let pendingStatus: StatusSnapshot | null = null;
@@ -82,25 +86,17 @@ function applyStatus(snapshot: StatusSnapshot): void {
   els.statusDot.className = `status-dot ${snapshot.state}`;
   els.statusText.textContent = snapshot.state[0].toUpperCase() + snapshot.state.slice(1);
   els.detailText.textContent = snapshot.detail;
-  els.rateReadout.textContent = `${snapshot.sampleRateHz.toFixed(0)} sa/s`;
-  els.healthReadout.textContent = `${snapshot.sequenceGaps} gaps, ${snapshot.resyncs} resyncs`;
 }
 
 function applyFftReadouts(snapshot: FftSnapshot): void {
-  const axis = snapshot.peakAxis.toUpperCase();
-  const freq = `${snapshot.peakHz.toFixed(2)} Hz`;
-  els.peakValue.textContent = freq;
-  els.peakAxis.textContent = axis;
-  els.freqReadout.textContent = freq;
-  els.axisReadout.textContent = `Axis ${axis}`;
+  els.peakValue.textContent = `${snapshot.peakHz.toFixed(2)} Hz`;
+  els.peakAxis.textContent = snapshot.peakAxis.toUpperCase();
 }
 
 function applySensorReadouts(snapshot: ModelSnapshot): void {
   els.headAx.textContent = snapshot.ax.toFixed(3);
   els.headAy.textContent = snapshot.ay.toFixed(3);
   els.headAz.textContent = snapshot.az.toFixed(3);
-  els.sensorReadout.textContent =
-    `${snapshot.ax.toFixed(3)} / ${snapshot.ay.toFixed(3)} / ${snapshot.az.toFixed(3)} g`;
 }
 
 class LiveCharts {
@@ -111,8 +107,20 @@ class LiveCharts {
     this.accel = init(accelEl, null, { renderer: "canvas" });
     this.fft = init(fftEl, null, { renderer: "canvas" });
 
-    this.accel.setOption(createBaseOption({ yMin: -2, yMax: 2, unit: "g", showXAxisLabels: false }));
-    this.fft.setOption(createBaseOption({ unit: "dB", showXAxisLabels: true }));
+    this.accel.setOption(createBaseOption({
+      yMin: -2,
+      yMax: 2,
+      unit: "g",
+      showXAxisLabels: true,
+      xAxisName: "Sample",
+      yAxisName: "Acceleration (g)",
+    }));
+    this.fft.setOption(createBaseOption({
+      unit: "dB",
+      showXAxisLabels: true,
+      xAxisName: "Frequency (Hz)",
+      yAxisName: "Magnitude (dB)",
+    }));
     this.updateAccel([]);
     this.updateFft([], []);
 
@@ -156,27 +164,44 @@ class LiveCharts {
   updateFft(freqs: number[], db: number[]): void {
     const data: Array<[number, number]> = [];
     const count = Math.min(freqs.length, db.length);
+    let peak: [number, number] | null = null;
 
     for (let i = 0; i < count; i += 1) {
       const freq = freqs[i];
       const value = db[i];
       if (Number.isFinite(freq) && Number.isFinite(value) && freq <= 1000) {
         data.push([freq, value]);
+        if (peak === null || value > peak[1]) {
+          peak = [freq, value];
+        }
       }
     }
 
     this.fft.setOption(
       {
         yAxis: createAutoYAxis(data.map(([, value]) => value), "dB"),
-        series: [createFftSeries(data)],
+        series: [createFftSeries(data, peak)],
       },
       { lazyUpdate: true, silent: true },
     );
   }
 }
 
-function createFftSeries(data: Array<[number, number]>): LineSeriesOption {
-  return createLineSeries("Combined", data, "#14161a");
+function createFftSeries(
+  data: Array<[number, number]>,
+  peak: [number, number] | null,
+): LineSeriesOption {
+  const series = createLineSeries("Combined", data, "#14161a");
+  if (peak !== null) {
+    series.markPoint = {
+      symbol: "circle",
+      symbolSize: 16,
+      itemStyle: { color: "#dc2626", borderColor: "#ffffff", borderWidth: 2 },
+      label: { show: false },
+      data: [{ name: "peak", coord: peak }],
+    };
+  }
+  return series;
 }
 
 function createBaseOption({
@@ -184,21 +209,30 @@ function createBaseOption({
   yMax,
   unit,
   showXAxisLabels,
+  xAxisName,
+  yAxisName,
 }: {
   yMin?: number;
   yMax?: number;
   unit: string;
   showXAxisLabels: boolean;
+  xAxisName: string;
+  yAxisName: string;
 }): LiveChartOption {
+  const axisNameStyle = {
+    color: "hsl(240 3.8% 46.1%)",
+    fontSize: 11,
+    fontWeight: 600 as const,
+  };
   return {
     animation: false,
     backgroundColor: "hsl(0 0% 100%)",
     color: ["hsl(346 77% 49%)", "hsl(262 83% 58%)", "hsl(181 75% 35%)"],
     grid: {
-      left: 38,
-      right: 14,
-      top: 12,
-      bottom: showXAxisLabels ? 28 : 18,
+      left: 52,
+      right: 16,
+      top: 16,
+      bottom: 38,
       containLabel: true,
     },
     tooltip: {
@@ -218,6 +252,10 @@ function createBaseOption({
       type: "value",
       min: 0,
       max: showXAxisLabels ? 1000 : 1,
+      name: xAxisName,
+      nameLocation: "middle",
+      nameGap: 24,
+      nameTextStyle: axisNameStyle,
       axisLabel: {
         show: showXAxisLabels,
         color: "hsl(240 3.8% 46.1%)",
@@ -232,6 +270,10 @@ function createBaseOption({
       min: yMin,
       max: yMax,
       scale: yMin === undefined || yMax === undefined,
+      name: yAxisName,
+      nameLocation: "middle",
+      nameGap: 38,
+      nameTextStyle: axisNameStyle,
       axisLabel: {
         color: "hsl(240 3.8% 46.1%)",
         fontSize: 11,
@@ -362,9 +404,9 @@ function simulatedSample(sampleIndex: number): [number, number, number] {
   const t = sampleIndex / 8000;
   const tau = 2 * Math.PI;
   return [
-    0.22 * Math.sin(tau * 35 * t) + simulatedAxisNoise(sampleIndex, 0),
-    0.16 * Math.sin(tau * 90 * t) + simulatedAxisNoise(sampleIndex, 1),
-    1 + 0.08 * Math.sin(tau * 13 * t) + simulatedAxisNoise(sampleIndex, 2),
+    simulatedAxisNoise(sampleIndex, 0),
+    simulatedAxisNoise(sampleIndex, 1),
+    1 + 0.05 * Math.sin(tau * 250 * t) + simulatedAxisNoise(sampleIndex, 2),
   ];
 }
 
@@ -376,25 +418,23 @@ function simulatedAxisNoise(sampleIndex: number, axis: number): number {
   value = (value ^ (value >>> 13)) >>> 0;
   value = Math.imul(value, 3266489917) >>> 0;
   value = (value ^ (value >>> 16)) >>> 0;
-  return ((value / 0xffffffff) * 2 - 1) * 0.0001;
+  return ((value / 0xffffffff) * 2 - 1) * 0.001;
 }
 
 function simulatedFftSnapshot(): FftSnapshot {
   const freqs: number[] = [];
   const combinedDb: number[] = [];
-  const peakHz = 35.16;
+  const peakHz = 250;
 
   for (let freq = 0; freq <= 1000; freq += 2) {
     freqs.push(freq);
     combinedDb.push(Math.max(
       -120,
-      -118 +
-        82 * Math.exp(-((freq - peakHz) ** 2) / 28) +
-        14 * Math.exp(-((freq - 90) ** 2) / 40),
+      -100 + 70 * Math.exp(-((freq - peakHz) ** 2) / 18),
     ));
   }
 
-  return { freqs, combinedDb, peakHz, peakAxis: "x" };
+  return { freqs, combinedDb, peakHz, peakAxis: "z" };
 }
 
 function createModelSnapshot([ax, ay, az]: [number, number, number]): ModelSnapshot {

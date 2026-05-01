@@ -459,10 +459,12 @@ fn run_simulator(app: &AppHandle, stop: &AtomicBool, sequence_gaps: u64, resyncs
 }
 
 fn simulated_sample(sample_index: usize) -> [f32; 3] {
+    let t = sample_index as f32 / SAMPLE_RATE_HZ;
+    let tau = 2.0 * std::f32::consts::PI;
     [
         simulated_axis_noise(sample_index, 0),
         simulated_axis_noise(sample_index, 1),
-        simulated_axis_noise(sample_index, 2),
+        1.0 + 0.05 * (tau * 250.0 * t).sin() + simulated_axis_noise(sample_index, 2),
     ]
 }
 

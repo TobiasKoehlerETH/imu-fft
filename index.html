@@ -36,15 +36,7 @@
             </div>
           </div>
           <div class="topbar-controls">
-            <button class="pill-button" type="button" aria-disabled="true" disabled>
-              <span class="pill-button-label">Sample</span>
-              <span class="pill-button-value">800 Hz</span>
-            </button>
-            <button class="toggle-pill is-on" type="button" aria-disabled="true" disabled>
-              <span class="toggle-knob"></span>
-              <span>Fast mode</span>
-            </button>
-            <button class="ghost-button" type="button" aria-disabled="true" disabled>Tare</button>
+            <button id="tare-button" class="ghost-button" type="button">Tare</button>
           </div>
         </div>
       </header>
@@ -80,32 +72,6 @@
               <span class="panel-title-tag">0–1000 Hz</span>
             </div>
             <div id="fft-chart" class="live-chart"></div>
-          </div>
-          <div class="readout-grid">
-            <div class="readout-cell">
-              <div class="readout-head">
-                <span class="readout-label">Frequency</span>
-                <span class="tag">Dominant</span>
-              </div>
-              <strong id="freq-readout" class="readout-value">0.00 Hz</strong>
-              <small id="axis-readout" class="readout-sub">Axis X</small>
-            </div>
-            <div class="readout-cell">
-              <div class="readout-head">
-                <span class="readout-label">Sensors</span>
-                <span class="tag">Live data</span>
-              </div>
-              <strong id="sensor-readout" class="readout-value">0.000 / 0.000 / 0.000 g</strong>
-              <small class="readout-sub">Ax · Ay · Az</small>
-            </div>
-            <div class="readout-cell">
-              <div class="readout-head">
-                <span class="readout-label">Frames</span>
-                <span class="tag">Health</span>
-              </div>
-              <strong id="rate-readout" class="readout-value">8000 sa/s</strong>
-              <small id="health-readout" class="readout-sub">0 gaps, 0 resyncs</small>
-            </div>
           </div>
         </section>
       </main>

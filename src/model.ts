@@ -57,6 +57,10 @@ export class ModelView {
     this.modelRoot.rotation.copy(new THREE.Euler(rollRad, pitchRad, yawRad, "ZYX"));
   }
 
+  tare(): void {
+    this.controls.reset();
+  }
+
   private loadModel(): void {
     new GLTFLoader().load(
       "/Buffer_threads.glb",
