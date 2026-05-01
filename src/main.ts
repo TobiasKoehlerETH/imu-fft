@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import type { LineSeriesOption } from "echarts/charts";
 import { LineChart } from "echarts/charts";
 import type {
@@ -70,12 +72,18 @@ const els = {
   fftChart: requireElement("fft-chart"),
   simulationToggle: requireInputElement("simulation-toggle"),
   tareButton: requireElement("tare-button"),
+  updateNotice: requireElement("update-notice"),
+  updateText: requireElement("update-text"),
+  updateInstallButton: requireButtonElement("update-install-button"),
   accelLegendItems: Array.from(document.querySelectorAll<HTMLElement>("[data-accel-axis]")),
 };
 
 els.tareButton.addEventListener("click", () => model.tare());
 els.simulationToggle.addEventListener("change", () => {
   setSimulationEnabled(els.simulationToggle.checked);
+});
+els.updateInstallButton.addEventListener("click", () => {
+  void installPendingUpdate();
 });
 
 let latestModel: ModelSnapshot = { ax: 0, ay: 0, az: 0, roll: 0, pitch: 0, yaw: 0 };
@@ -84,6 +92,9 @@ let pendingFft: FftSnapshot | null = null;
 let pendingSensor: ModelSnapshot | null = null;
 let simulationEnabled = false;
 let currentStreamState: StatusSnapshot["state"] = "searching";
+let pendingUpdate: Update | null = null;
+let updateDownloadedBytes = 0;
+let updateContentLength: number | null = null;
 
 const model = new ModelView(els.modelView, (rate) => {
   els.modelRate.textContent = `${rate.toFixed(0)} Hz`;
@@ -102,6 +113,14 @@ function requireInputElement(id: string): HTMLInputElement {
   const element = document.getElementById(id);
   if (!(element instanceof HTMLInputElement)) {
     throw new Error(`Missing input element: ${id}`);
+  }
+  return element;
+}
+
+function requireButtonElement(id: string): HTMLButtonElement {
+  const element = document.getElementById(id);
+  if (!(element instanceof HTMLButtonElement)) {
+    throw new Error(`Missing button element: ${id}`);
   }
   return element;
 }
@@ -159,6 +178,82 @@ function setSimulationEnabled(enabled: boolean): void {
       resyncs: 0,
     };
   }
+}
+
+function startUpdateCheck(): void {
+  void check({ timeout: 15000 })
+    .then((update) => {
+      if (!update) {
+        return;
+      }
+
+      pendingUpdate = update;
+      els.updateNotice.hidden = false;
+      els.updateText.textContent = `Update ${update.version} available`;
+      els.updateInstallButton.disabled = false;
+      els.updateInstallButton.textContent = "Install";
+    })
+    .catch((error) => {
+      console.warn("Update check failed", error);
+    });
+}
+
+async function installPendingUpdate(): Promise<void> {
+  if (!pendingUpdate) {
+    return;
+  }
+
+  const update = pendingUpdate;
+  pendingUpdate = null;
+  updateDownloadedBytes = 0;
+  updateContentLength = null;
+  els.updateNotice.hidden = false;
+  els.updateInstallButton.disabled = true;
+  els.updateInstallButton.textContent = "Installing";
+  els.updateText.textContent = `Downloading ${update.version}`;
+
+  try {
+    await update.downloadAndInstall((event) => applyUpdateDownloadEvent(event));
+    els.updateText.textContent = "Restarting to finish update";
+    await relaunch();
+  } catch (error) {
+    pendingUpdate = update;
+    els.updateInstallButton.disabled = false;
+    els.updateInstallButton.textContent = "Retry";
+    els.updateText.textContent = `Update failed: ${String(error)}`;
+  }
+}
+
+function applyUpdateDownloadEvent(event: DownloadEvent): void {
+  if (event.event === "Started") {
+    updateDownloadedBytes = 0;
+    updateContentLength = event.data.contentLength ?? null;
+    els.updateText.textContent = updateContentLength === null
+      ? "Downloading update"
+      : "Downloading update 0%";
+    return;
+  }
+
+  if (event.event === "Progress") {
+    updateDownloadedBytes += event.data.chunkLength;
+    if (updateContentLength === null || updateContentLength <= 0) {
+      els.updateText.textContent = `Downloaded ${formatBytes(updateDownloadedBytes)}`;
+      return;
+    }
+
+    const percent = Math.min(100, Math.round((updateDownloadedBytes / updateContentLength) * 100));
+    els.updateText.textContent = `Downloading update ${percent}%`;
+    return;
+  }
+
+  els.updateText.textContent = "Installing update";
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function shouldDisplayData(): boolean {
@@ -625,6 +720,7 @@ setupAccelLegend(charts);
 
 if (window.__TAURI_INTERNALS__) {
   startTauriStream();
+  startUpdateCheck();
 } else {
   startBrowserPreview();
 }

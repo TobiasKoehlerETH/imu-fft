@@ -4,6 +4,9 @@ node_modules/
 # Frontend build output
 dist/
 
+# Local desktop build artifacts
+dist-desktop/
+
 # Tauri/Rust build output
 src-tauri/target/
 

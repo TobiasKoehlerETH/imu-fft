@@ -87,6 +87,7 @@ button {
 .topbar-right,
 .top-readouts,
 .topbar-controls,
+.update-notice,
 .panel-title,
 .panel-title-group,
 .legend,
@@ -229,6 +230,36 @@ button {
 
 .topbar-controls {
   gap: 8px;
+}
+
+.update-notice {
+  gap: 8px;
+  height: 34px;
+  padding: 0 4px 0 10px;
+  color: hsl(var(--secondary-foreground));
+  background: hsl(var(--status-simulated) / 0.08);
+  border: 1px solid hsl(var(--status-simulated) / 0.18);
+  border-radius: var(--radius);
+}
+
+.update-notice[hidden] {
+  display: none;
+}
+
+.update-text {
+  max-width: 24ch;
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-button {
+  height: 26px;
+  padding: 0 9px;
+  background: hsl(var(--background));
 }
 
 .switch-control {
@@ -516,6 +547,16 @@ button {
   .topbar-controls {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .update-notice {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .update-button {
+    width: auto;
   }
 
   .top-readout,

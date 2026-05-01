@@ -32,6 +32,39 @@ After packaging, the release executable is also available at:
 src-tauri/target/release/imu-fft.exe
 ```
 
+## Publish Auto Updates
+
+The installed app checks GitHub Releases for a signed Tauri updater manifest at startup:
+
+```text
+https://github.com/TobiasKoehlerETH/imu-fft/releases/latest/download/latest.json
+```
+
+The updater signing private key was generated outside the repository at:
+
+```text
+%USERPROFILE%\.tauri\imu-fft.key
+```
+
+Before publishing the first release, add these GitHub repository secrets:
+
+```text
+TAURI_SIGNING_PRIVATE_KEY
+TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+```
+
+`TAURI_SIGNING_PRIVATE_KEY` can be either the private key content or the signing key file content. The generated local key has no password, so `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` can be left empty unless you replace the key with a password-protected one.
+
+To publish the first release as `0.1.0`, run the release workflow manually with `version` set to `0.1.0`. For later releases, run the same workflow without an exact version and choose `patch`, `minor`, or `major`; the workflow updates `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`, commits that version bump, tags the release, and publishes the MSI plus updater metadata.
+
+You can also bump versions locally before a release:
+
+```powershell
+node scripts/bump-version.mjs --bump patch
+```
+
+The `.github/workflows/release.yml` workflow builds the Windows MSI, uploads updater signatures, and publishes `latest.json` to the release. Human-pushed tags matching `v*.*.*` are still supported as long as the tag version matches the version files.
+
 ## Verify
 
 ```powershell

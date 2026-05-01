@@ -3,5 +3,10 @@
   "identifier": "default",
   "description": "Default app permissions",
   "windows": ["main"],
-  "permissions": ["core:default", "core:event:default"]
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "process:default",
+    "updater:default"
+  ]
 }

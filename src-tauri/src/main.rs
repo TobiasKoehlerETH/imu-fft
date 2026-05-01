@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod dsp;
 mod stream;
 
@@ -29,6 +31,8 @@ fn main() {
     let startup_stream = stream.clone();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState { stream })
         .invoke_handler(tauri::generate_handler![
             start_stream,
