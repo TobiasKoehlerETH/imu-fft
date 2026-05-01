@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IMU FFT</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="status-pill">
+            <span id="status-dot" class="status-dot searching"></span>
+            <span id="status-text" class="status-text">Searching</span>
+            <span id="detail-text" class="status-detail">Waiting for serial port</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <div class="top-readouts">
+            <div class="top-readout">
+              <span class="top-readout-label">Peak</span>
+              <strong id="peak-value">0.00 Hz</strong>
+              <span class="axis-chip" id="peak-axis">X</span>
+            </div>
+            <div class="top-readout">
+              <span class="top-readout-label">Ax</span>
+              <strong id="head-ax">0.000</strong>
+            </div>
+            <div class="top-readout">
+              <span class="top-readout-label">Ay</span>
+              <strong id="head-ay">0.000</strong>
+            </div>
+            <div class="top-readout">
+              <span class="top-readout-label">Az</span>
+              <strong id="head-az">0.000</strong>
+            </div>
+          </div>
+          <div class="topbar-controls">
+            <button class="pill-button" type="button" aria-disabled="true" disabled>
+              <span class="pill-button-label">Sample</span>
+              <span class="pill-button-value">800 Hz</span>
+            </button>
+            <button class="toggle-pill is-on" type="button" aria-disabled="true" disabled>
+              <span class="toggle-knob"></span>
+              <span>Fast mode</span>
+            </button>
+            <button class="ghost-button" type="button" aria-disabled="true" disabled>Tare</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="panel model-panel" aria-label="3D model">
+          <div class="panel-title">
+            <span class="panel-title-label">3D</span>
+            <span class="panel-title-tag" id="model-rate">0 Hz</span>
+          </div>
+          <div id="model-view"></div>
+        </section>
+
+        <section class="charts" aria-label="Live charts">
+          <div class="panel chart-panel">
+            <div class="panel-title">
+              <span class="panel-title-label">Accelerometer</span>
+              <div class="legend">
+                <span class="legend-item"><span class="legend-dot" style="background:#e11d74"></span>X</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#7c3aed"></span>Y</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#0ea5a4"></span>Z</span>
+                <span class="panel-title-tag">8 kHz</span>
+              </div>
+            </div>
+            <canvas id="accel-canvas"></canvas>
+          </div>
+          <div class="panel chart-panel">
+            <div class="panel-title">
+              <span class="panel-title-group">
+                <span class="panel-title-label">FFT</span>
+                <span class="badge badge-peak">Peak</span>
+              </span>
+              <span class="panel-title-tag">0–1000 Hz</span>
+            </div>
+            <canvas id="fft-canvas"></canvas>
+          </div>
+          <div class="readout-grid">
+            <div class="readout-cell">
+              <div class="readout-head">
+                <span class="readout-label">Frequency</span>
+                <span class="tag">Dominant</span>
+              </div>
+              <strong id="freq-readout" class="readout-value">0.00 Hz</strong>
+              <small id="axis-readout" class="readout-sub">Axis X</small>
+            </div>
+            <div class="readout-cell">
+              <div class="readout-head">
+                <span class="readout-label">Sensors</span>
+                <span class="tag">Live data</span>
+              </div>
+              <strong id="sensor-readout" class="readout-value">0.000 / 0.000 / 0.000 g</strong>
+              <small class="readout-sub">Ax · Ay · Az</small>
+            </div>
+            <div class="readout-cell">
+              <div class="readout-head">
+                <span class="readout-label">Frames</span>
+                <span class="tag">Health</span>
+              </div>
+              <strong id="rate-readout" class="readout-value">8000 sa/s</strong>
+              <small id="health-readout" class="readout-sub">0 gaps, 0 resyncs</small>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

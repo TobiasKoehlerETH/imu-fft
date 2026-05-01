@@ -1,0 +1,18 @@
+[package]
+name = "imu-fft"
+version = "0.1.0"
+description = "Minimal ICM-42688-P FFT viewer"
+authors = ["Tobias Koehler"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2.2", features = [] }
+
+[dependencies]
+rustfft = "6.2"
+serde = { version = "1", features = ["derive"] }
+serialport = "4.7"
+tauri = { version = "2.5", features = [] }
+
+[dev-dependencies]
+serde_json = "1"
