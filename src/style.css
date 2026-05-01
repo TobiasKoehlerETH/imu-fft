@@ -262,8 +262,8 @@ button {
 
 .update-button {
   height: 26px;
-  padding: 0 9px;
-  background: hsl(var(--background));
+  width: 26px;
+  flex-basis: 26px;
 }
 
 .switch-control {
@@ -375,24 +375,18 @@ button {
   padding: 0;
 }
 
-.button-icon,
-.update-icon {
+.button-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
 }
 
-.button-icon-svg,
-.update-icon-svg {
+.button-icon-svg {
   display: block;
   width: 16px;
   height: 16px;
   stroke-width: 2;
-}
-
-.update-icon {
-  color: hsl(var(--status-simulated));
 }
 
 .workspace {

@@ -78,14 +78,14 @@ const els = {
   tareButton: requireElement("tare-button"),
   tareIcon: requireElement("tare-icon"),
   updateNotice: requireElement("update-notice"),
-  updateIcon: requireElement("update-icon"),
   updateText: requireElement("update-text"),
   updateInstallButton: requireButtonElement("update-install-button"),
+  updateInstallIcon: requireElement("update-install-icon"),
   accelLegendItems: Array.from(document.querySelectorAll<HTMLElement>("[data-accel-axis]")),
 };
 
 mountIcon(els.tareIcon, RefreshCcw, "button-icon-svg");
-mountIcon(els.updateIcon, Download, "update-icon-svg");
+mountIcon(els.updateInstallIcon, Download, "button-icon-svg");
 
 els.tareButton.addEventListener("click", () => model.tare());
 els.simulationToggle.addEventListener("change", () => {
@@ -212,7 +212,7 @@ function startUpdateCheck(): void {
       els.updateNotice.hidden = false;
       els.updateText.textContent = `Update ${update.version} available`;
       els.updateInstallButton.disabled = false;
-      els.updateInstallButton.textContent = "Install";
+      setUpdateInstallButtonLabel("Install update");
     })
     .catch((error) => {
       console.warn("Update check failed", error);
@@ -230,7 +230,7 @@ async function installPendingUpdate(): Promise<void> {
   updateContentLength = null;
   els.updateNotice.hidden = false;
   els.updateInstallButton.disabled = true;
-  els.updateInstallButton.textContent = "Installing";
+  setUpdateInstallButtonLabel("Installing update");
   els.updateText.textContent = `Downloading ${update.version}`;
 
   try {
@@ -240,9 +240,14 @@ async function installPendingUpdate(): Promise<void> {
   } catch (error) {
     pendingUpdate = update;
     els.updateInstallButton.disabled = false;
-    els.updateInstallButton.textContent = "Retry";
+    setUpdateInstallButtonLabel("Retry update");
     els.updateText.textContent = `Update failed: ${String(error)}`;
   }
+}
+
+function setUpdateInstallButtonLabel(label: string): void {
+  els.updateInstallButton.setAttribute("aria-label", label);
+  els.updateInstallButton.title = label;
 }
 
 function applyUpdateDownloadEvent(event: DownloadEvent): void {
