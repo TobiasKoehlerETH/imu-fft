@@ -87,7 +87,6 @@ button {
 .topbar-right,
 .top-readouts,
 .topbar-controls,
-.update-notice,
 .panel-title,
 .panel-title-group,
 .legend,
@@ -121,7 +120,7 @@ button {
   height: 34px;
   color: hsl(var(--secondary-foreground));
   background: transparent;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid transparent;
   border-radius: var(--radius);
   cursor: help;
   transition:
@@ -133,7 +132,7 @@ button {
 .status-indicator:hover,
 .status-indicator:focus-visible {
   background: hsl(var(--primary) / 0.05);
-  border-color: hsl(var(--primary) / 0.16);
+  border-color: transparent;
 }
 
 .status-indicator:focus-visible {
@@ -176,6 +175,12 @@ button {
   transform: translateY(-2px);
 }
 
+[data-tooltip][data-tooltip-align="end"]::after {
+  right: 0;
+  left: auto;
+  transform: translateY(-2px);
+}
+
 [data-tooltip]:hover::after,
 [data-tooltip]:focus-visible::after {
   opacity: 1;
@@ -183,7 +188,9 @@ button {
 }
 
 [data-tooltip][data-tooltip-align="start"]:hover::after,
-[data-tooltip][data-tooltip-align="start"]:focus-visible::after {
+[data-tooltip][data-tooltip-align="start"]:focus-visible::after,
+[data-tooltip][data-tooltip-align="end"]:hover::after,
+[data-tooltip][data-tooltip-align="end"]:focus-visible::after {
   transform: translateY(0);
 }
 
@@ -283,33 +290,27 @@ button {
 }
 
 .update-notice {
-  gap: 8px;
-  height: 34px;
-  padding: 0 4px 0 10px;
-  color: hsl(var(--secondary-foreground));
-  background: hsl(var(--status-simulated) / 0.08);
-  border: 1px solid hsl(var(--status-simulated) / 0.18);
-  border-radius: var(--radius);
+  display: contents;
 }
 
 .update-notice[hidden] {
   display: none;
 }
 
-.update-text {
-  max-width: 24ch;
-  overflow: hidden;
-  color: hsl(var(--foreground));
-  font-size: 12px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.update-button {
+  color: hsl(var(--destructive));
+  border-color: transparent;
 }
 
-.update-button {
-  height: 26px;
-  width: 26px;
-  flex-basis: 26px;
+.update-button:hover:not([disabled]) {
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.08);
+  border-color: transparent;
+}
+
+.update-button[disabled] {
+  color: hsl(var(--destructive));
+  opacity: 0.7;
 }
 
 .switch-control {
@@ -320,7 +321,7 @@ button {
   padding: 0 10px;
   color: hsl(var(--secondary-foreground));
   background: transparent;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid transparent;
   border-radius: var(--radius);
   cursor: pointer;
   user-select: none;
@@ -391,7 +392,7 @@ button {
   padding: 0 12px;
   color: hsl(var(--secondary-foreground));
   background: transparent;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid transparent;
   border-radius: var(--radius);
   cursor: pointer;
   transition:
@@ -625,14 +626,8 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .update-notice {
-    grid-column: 1 / -1;
-    justify-content: space-between;
-    width: 100%;
-  }
-
   .update-button {
-    width: auto;
+    width: 100%;
   }
 
   .top-readout,

@@ -78,7 +78,6 @@ const els = {
   tareButton: requireElement("tare-button"),
   tareIcon: requireElement("tare-icon"),
   updateNotice: requireElement("update-notice"),
-  updateText: requireElement("update-text"),
   updateInstallButton: requireButtonElement("update-install-button"),
   updateInstallIcon: requireElement("update-install-icon"),
   accelLegendItems: Array.from(document.querySelectorAll<HTMLElement>("[data-accel-axis]")),
@@ -222,9 +221,8 @@ function startUpdateCheck(): void {
 
       pendingUpdate = update;
       els.updateNotice.hidden = false;
-      els.updateText.textContent = `Update ${update.version} available`;
       els.updateInstallButton.disabled = false;
-      setUpdateInstallButtonLabel("Install update");
+      setUpdateInstallButtonLabel(`Update ${update.version} available`);
     })
     .catch((error) => {
       console.warn("Update check failed", error);
@@ -242,18 +240,16 @@ async function installPendingUpdate(): Promise<void> {
   updateContentLength = null;
   els.updateNotice.hidden = false;
   els.updateInstallButton.disabled = true;
-  setUpdateInstallButtonLabel("Installing update");
-  els.updateText.textContent = `Downloading ${update.version}`;
+  setUpdateInstallButtonLabel(`Downloading ${update.version}`);
 
   try {
     await update.downloadAndInstall((event) => applyUpdateDownloadEvent(event));
-    els.updateText.textContent = "Restarting to finish update";
+    setUpdateInstallButtonLabel("Restarting to finish update");
     await relaunch();
   } catch (error) {
     pendingUpdate = update;
     els.updateInstallButton.disabled = false;
-    setUpdateInstallButtonLabel("Retry update");
-    els.updateText.textContent = `Update failed: ${String(error)}`;
+    setUpdateInstallButtonLabel(`Update failed: ${String(error)}`);
   }
 }
 
@@ -266,25 +262,25 @@ function applyUpdateDownloadEvent(event: DownloadEvent): void {
   if (event.event === "Started") {
     updateDownloadedBytes = 0;
     updateContentLength = event.data.contentLength ?? null;
-    els.updateText.textContent = updateContentLength === null
+    setUpdateInstallButtonLabel(updateContentLength === null
       ? "Downloading update"
-      : "Downloading update 0%";
+      : "Downloading update 0%");
     return;
   }
 
   if (event.event === "Progress") {
     updateDownloadedBytes += event.data.chunkLength;
     if (updateContentLength === null || updateContentLength <= 0) {
-      els.updateText.textContent = `Downloaded ${formatBytes(updateDownloadedBytes)}`;
+      setUpdateInstallButtonLabel(`Downloaded ${formatBytes(updateDownloadedBytes)}`);
       return;
     }
 
     const percent = Math.min(100, Math.round((updateDownloadedBytes / updateContentLength) * 100));
-    els.updateText.textContent = `Downloading update ${percent}%`;
+    setUpdateInstallButtonLabel(`Downloading update ${percent}%`);
     return;
   }
 
-  els.updateText.textContent = "Installing update";
+  setUpdateInstallButtonLabel("Installing update");
 }
 
 function formatBytes(bytes: number): string {

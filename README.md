@@ -21,7 +21,7 @@ The app opens the first detected serial port at `921600` baud, clears the input 
 - The simulation toggle enables fallback sample data when no serial device is connected.
 - The top readouts show FFT peak frequency, peak axis, and the latest `Ax`, `Ay`, and `Az` values. The FFT peak marker stays hidden until live or simulated data is running.
 - The icon-only tare button recenters the 3D model view.
-- If an updater release is available, the update notice shows an install icon button and progress text.
+- If an updater release is available, the topbar shows a red update icon; hover or focus it to see update availability, download, install, or error text.
 
 ## Package the Desktop App
 

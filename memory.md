@@ -4,6 +4,7 @@ Last reviewed: 2026-05-02
 
 ## Latest Work
 
+- Changed the update notification to a red icon-only topbar button that shows availability/progress/error text through the shared hover/focus tooltip.
 - Bumped the app to `0.1.3` for the shared tooltip cleanup, black ECharts axis labels, and hidden idle FFT peak marker.
 - Replaced native topbar `title` tooltips with the shared `data-tooltip` CSS pattern so only one hover/focus tooltip appears.
 - Updated FFT display logic so chart data and the red peak marker stay hidden while the stream is only searching for a sensor.
