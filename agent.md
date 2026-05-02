@@ -2,13 +2,15 @@
 
 ## Project Shape
 
-`imu-fft` is a small Tauri 2 desktop app for visualizing an ICM-42688-P IMU UART stream. The frontend is Vite + TypeScript with ECharts and Three.js. The backend is Rust under `src-tauri`, where the serial reader, frame parser, simulator, orientation model, and FFT analysis live.
+`imu-fft` is a small Tauri 2 desktop app for visualizing an ICM-42688-P IMU UART stream. The frontend is Vite + TypeScript with ECharts, Three.js, and Lucide icons. The backend is Rust under `src-tauri`, where the serial reader, frame parser, simulator, orientation model, and FFT analysis live.
 
 The app expects binary `0xAA 0x55` frames at `921600` baud. If no serial port is available, the UI can run with bounded simulated data.
 
 ## Current Memory
 
 Read [`memory.md`](memory.md) before making changes. It summarizes the latest repo work, recent release/versioning changes, and any open context that is easy to lose between sessions.
+
+Keep [`README.md`](README.md) aligned with user-facing behavior, setup, packaging, releases, verification, and notable technical design notes.
 
 ## Common Commands
 
@@ -38,6 +40,7 @@ node scripts/bump-version.mjs --bump patch
 ## Important Files
 
 - `src/main.ts` owns the browser/Tauri UI wiring, chart setup, simulated browser preview, update checks, and Tauri event listeners.
+- `index.html` owns the visible shell, hover-only status LED, topbar controls, chart containers, and icon mount points.
 - `src/model.ts` owns the Three.js model view.
 - `src/style.css` owns the application layout and visual system.
 - `src-tauri/src/main.rs` registers Tauri commands and starts the stream controller.

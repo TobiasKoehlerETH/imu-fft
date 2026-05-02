@@ -62,9 +62,9 @@ type AxisLabelOption = {
 const accelAxes = ["x", "y", "z"] as const;
 
 const els = {
+  statusIndicator: requireElement("status-indicator"),
   statusDot: requireElement("status-dot"),
   statusText: requireElement("status-text"),
-  detailText: requireElement("detail-text"),
   peakValue: requireElement("peak-value"),
   peakAxis: requireElement("peak-axis"),
   headAx: requireElement("head-ax"),
@@ -144,12 +144,25 @@ function mountIcon(target: HTMLElement, icon: IconNode, className: string): void
 }
 
 function applyStatus(snapshot: StatusSnapshot): void {
+  const label = getStatusLabel(snapshot.state);
+  els.statusIndicator.className = `status-indicator ${snapshot.state}`;
+  els.statusIndicator.setAttribute("aria-label", label);
+  els.statusIndicator.title = label;
   els.statusDot.className = `status-dot ${snapshot.state}`;
-  const isSearching = snapshot.state === "searching";
-  els.statusText.textContent = isSearching
-    ? "no sensor connected"
-    : snapshot.state[0].toUpperCase() + snapshot.state.slice(1);
-  els.detailText.textContent = isSearching ? "" : snapshot.detail;
+  els.statusText.textContent = label;
+}
+
+function getStatusLabel(state: StatusSnapshot["state"]): string {
+  if (state === "live") {
+    return "Connected";
+  }
+  if (state === "simulated") {
+    return "Simulation";
+  }
+  if (state === "searching") {
+    return "No Sensor connected";
+  }
+  return "Error";
 }
 
 function applyFftReadouts(snapshot: FftSnapshot): void {
