@@ -40,7 +40,7 @@ node scripts/bump-version.mjs --bump patch
 ## Important Files
 
 - `src/main.ts` owns the browser/Tauri UI wiring, chart setup, simulated browser preview, update checks, and Tauri event listeners.
-- `index.html` owns the visible shell, hover-only status LED, topbar controls, chart containers, and icon mount points.
+- `index.html` owns the visible shell, hover-only status LED, shared `data-tooltip` topbar tooltip hooks, chart containers, and icon mount points.
 - `src/model.ts` owns the Three.js model view.
 - `src/style.css` owns the application layout and visual system.
 - `src-tauri/src/main.rs` registers Tauri commands and starts the stream controller.
@@ -56,6 +56,8 @@ Keep the streaming path cheap. The parser and sample ring are intentionally allo
 Keep UI updates cadence-based. The Rust backend emits model, acceleration, FFT, and status events on timed intervals; it should not emit one event per sample or frame.
 
 Keep the browser preview useful. `src/main.ts` supports a non-Tauri preview path using simulated data; changes to the UI should continue to work when opened by Vite alone.
+
+Keep hover text consistent. Topbar hover/focus labels should use the shared `data-tooltip` CSS pattern, not native `title` attributes, so only one tooltip appears.
 
 Preserve Tauri updater behavior. Version changes should stay coordinated across `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
 

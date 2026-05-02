@@ -9,9 +9,8 @@
     <div id="app">
       <header class="topbar">
         <div class="topbar-left">
-          <div id="status-indicator" class="status-indicator searching" role="status" aria-live="polite" aria-label="No Sensor connected" tabindex="0">
+          <div id="status-indicator" class="status-indicator searching" role="status" aria-live="polite" aria-label="No Sensor connected" data-tooltip="No Sensor connected" data-tooltip-align="start" tabindex="0">
             <span id="status-dot" class="status-dot searching"></span>
-            <span id="status-text" class="status-tooltip">No Sensor connected</span>
           </div>
         </div>
         <div class="topbar-right">
@@ -42,12 +41,12 @@
               </span>
               <span class="switch-label">Simulation</span>
             </label>
-            <button id="tare-button" class="ghost-button icon-button" type="button" aria-label="Tare" title="Tare">
+            <button id="tare-button" class="ghost-button icon-button" type="button" aria-label="Tare" data-tooltip="Tare">
               <span id="tare-icon" class="button-icon" aria-hidden="true"></span>
             </button>
             <div id="update-notice" class="update-notice" hidden>
               <span id="update-text" class="update-text" aria-live="polite">Update available</span>
-              <button id="update-install-button" class="ghost-button icon-button update-button" type="button" aria-label="Install update" title="Install update">
+              <button id="update-install-button" class="ghost-button icon-button update-button" type="button" aria-label="Install update" data-tooltip="Install update">
                 <span id="update-install-icon" class="button-icon" aria-hidden="true"></span>
               </button>
             </div>

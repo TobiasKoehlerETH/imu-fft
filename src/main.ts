@@ -60,11 +60,11 @@ type AxisLabelOption = {
 };
 
 const accelAxes = ["x", "y", "z"] as const;
+const chartAxisTextColor = "#14161a";
 
 const els = {
   statusIndicator: requireElement("status-indicator"),
   statusDot: requireElement("status-dot"),
-  statusText: requireElement("status-text"),
   peakValue: requireElement("peak-value"),
   peakAxis: requireElement("peak-axis"),
   headAx: requireElement("head-ax"),
@@ -147,9 +147,8 @@ function applyStatus(snapshot: StatusSnapshot): void {
   const label = getStatusLabel(snapshot.state);
   els.statusIndicator.className = `status-indicator ${snapshot.state}`;
   els.statusIndicator.setAttribute("aria-label", label);
-  els.statusIndicator.title = label;
+  els.statusIndicator.dataset.tooltip = label;
   els.statusDot.className = `status-dot ${snapshot.state}`;
-  els.statusText.textContent = label;
 }
 
 function getStatusLabel(state: StatusSnapshot["state"]): string {
@@ -260,7 +259,7 @@ async function installPendingUpdate(): Promise<void> {
 
 function setUpdateInstallButtonLabel(label: string): void {
   els.updateInstallButton.setAttribute("aria-label", label);
-  els.updateInstallButton.title = label;
+  els.updateInstallButton.dataset.tooltip = label;
 }
 
 function applyUpdateDownloadEvent(event: DownloadEvent): void {
@@ -296,7 +295,7 @@ function formatBytes(bytes: number): string {
 }
 
 function shouldDisplayData(): boolean {
-  return currentStreamState !== "simulated" || simulationEnabled;
+  return currentStreamState === "live" || (currentStreamState === "simulated" && simulationEnabled);
 }
 
 function clearDisplayedData(): void {
@@ -451,7 +450,7 @@ function createFftSeries(
   peak: [number, number] | null,
 ): LineSeriesOption {
   const series = createLineSeries("Combined", data, "#14161a");
-  if (peak !== null) {
+  if (peak !== null && peak[0] > 0 && peak[1] > -119) {
     series.markPoint = {
       symbol: "circle",
       symbolSize: 16,
@@ -479,7 +478,7 @@ function createBaseOption({
   yAxisName: string;
 }): LiveChartOption {
   const axisNameStyle = {
-    color: "hsl(240 3.8% 46.1%)",
+    color: chartAxisTextColor,
     fontSize: 11,
     fontWeight: 600 as const,
   };
@@ -517,7 +516,7 @@ function createBaseOption({
       nameTextStyle: axisNameStyle,
       axisLabel: {
         show: showXAxisLabels,
-        color: "hsl(240 3.8% 46.1%)",
+        color: chartAxisTextColor,
         fontSize: 11,
       },
       axisLine: { lineStyle: { color: "hsl(240 5.9% 90%)" } },
@@ -534,7 +533,7 @@ function createBaseOption({
       nameGap: 56,
       nameTextStyle: axisNameStyle,
       axisLabel: {
-        color: "hsl(240 3.8% 46.1%)",
+        color: chartAxisTextColor,
         fontSize: 11,
         formatter: (value: number) => `${value}${unit === "g" ? "g" : ""}`,
       },
@@ -580,7 +579,7 @@ function createAutoYAxis(values: number[], unit: string): LiveChartOption["yAxis
 
 function createYAxisLabel(unit: string): AxisLabelOption {
   return {
-    color: "hsl(240 3.8% 46.1%)",
+    color: chartAxisTextColor,
     fontSize: 11,
     formatter: (value: number) => unit === "g" ? `${value.toFixed(2)}g` : `${value.toFixed(0)}${unit}`,
   };
@@ -606,6 +605,9 @@ function startTauriStream(): void {
   void listen<StatusSnapshot>("status", (event) => {
     currentStreamState = event.payload.state;
     pendingStatus = normalizeStatus(event.payload);
+    if (!shouldDisplayData()) {
+      clearDisplayedData();
+    }
   });
   void listen<AccelSnapshot>("accel", (event) => {
     if (!shouldDisplayData()) {

@@ -141,10 +141,15 @@ button {
   box-shadow: 0 0 0 2px hsl(var(--ring) / 0.18);
 }
 
-.status-tooltip {
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
   position: absolute;
   top: calc(100% + 8px);
-  left: 0;
+  left: 50%;
   z-index: 20;
   width: max-content;
   max-width: 220px;
@@ -159,16 +164,26 @@ button {
   line-height: 1.2;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-2px);
+  transform: translate(-50%, -2px);
   transition:
     opacity 120ms ease,
     transform 120ms ease;
   white-space: nowrap;
 }
 
-.status-indicator:hover .status-tooltip,
-.status-indicator:focus-visible .status-tooltip {
+[data-tooltip][data-tooltip-align="start"]::after {
+  left: 0;
+  transform: translateY(-2px);
+}
+
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after {
   opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+[data-tooltip][data-tooltip-align="start"]:hover::after,
+[data-tooltip][data-tooltip-align="start"]:focus-visible::after {
   transform: translateY(0);
 }
 
