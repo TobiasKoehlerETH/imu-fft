@@ -122,7 +122,6 @@ button {
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius);
-  cursor: help;
   transition:
     background 120ms ease,
     border-color 120ms ease,
@@ -232,21 +231,24 @@ button {
 .top-readout {
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 6px;
   height: 32px;
-  padding: 0 9px;
+  padding: 0 10px;
   color: hsl(var(--muted-foreground));
   border: 1px solid transparent;
   border-radius: var(--radius);
 }
 
 .top-readout-label {
+  flex: 0 0 auto;
   color: hsl(var(--muted-foreground));
   font-size: 11px;
   font-weight: 500;
 }
 
 .top-readout strong {
+  flex: 0 0 auto;
   color: hsl(var(--foreground));
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -255,15 +257,18 @@ button {
 }
 
 #peak-value {
-  min-width: 8ch;
+  width: 9ch;
 }
 
 #head-ax,
 #head-ay,
-#head-az,
+#head-az {
+  width: 7ch;
+}
+
 #head-tilt-x,
 #head-tilt-y {
-  min-width: 6ch;
+  width: 9ch;
 }
 
 .axis-chip,

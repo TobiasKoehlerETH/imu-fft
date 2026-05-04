@@ -65,7 +65,7 @@ Preserve Tauri updater behavior. Version changes should stay coordinated across 
 
 Every GitHub release must include a release-notes section with a bullet-point list of the major user-facing changes in that version. Keep the installer guidance, but do not publish a release body that only lists download instructions.
 
-Latest release target: `0.1.4` adds low-pass filtered pose estimation, filtered topbar tilt angles, fixed FFT dB scaling, and simplified chart/model chrome.
+Latest release target: `0.1.5` stabilizes topbar readout widths so live values do not shift neighboring controls, and removes the help cursor from the status LED hover state.
 
 ## Testing Expectations
 

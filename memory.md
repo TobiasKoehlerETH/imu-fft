@@ -4,6 +4,8 @@ Last reviewed: 2026-05-04
 
 ## Latest Work
 
+- Prepared release `v0.1.5` with fixed-width topbar numeric readouts so live `Peak`, `Ax`, `Ay`, `Az`, `Tilt X`, and `Tilt Y` values do not shift neighboring controls.
+- Removed the help cursor from the top-left status LED hover state while preserving the shared hover/focus tooltip.
 - Prepared release `v0.1.4` with low-pass filtered accelerometer input for 3D pose estimation and two topbar tilt-angle readouts derived from the same filtered pose sample.
 - Added `Tilt X` and `Tilt Y` topbar readouts alongside `Ax`, `Ay`, and `Az`; the live serial path and browser preview both use the same 8 Hz one-pole low-pass filter for pose snapshots.
 - Fixed the FFT display to use a stable dB axis range instead of auto-ranging on every FFT update.
@@ -23,6 +25,7 @@ Last reviewed: 2026-05-04
 
 ## Recent Repo Changes
 
+- Prepared release `v0.1.5`.
 - Prepared release `v0.1.4`.
 - Published release `v0.1.3`.
 - Reissued `v0.1.2` again for the hover-only status LED behavior.
@@ -42,6 +45,7 @@ Last reviewed: 2026-05-04
 - Runtime stream: binary `0xAA 0x55` frames at `921600` baud, 160 frames/s, 50 samples/frame, 8000 samples/s.
 - UI cadence: Rust emits model, acceleration, FFT, and status events on timers rather than per sample.
 - Pose model: Rust applies an 8 Hz one-pole low-pass filter before computing the `model` event angles. The `Tilt X` / `Tilt Y` topbar readouts come from that same filtered snapshot, while charts and FFT stay raw.
+- Topbar readouts use fixed character widths for changing numeric values to avoid layout jitter during live streaming.
 
 ## Keep In Mind
 

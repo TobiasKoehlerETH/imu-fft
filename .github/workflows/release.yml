@@ -95,10 +95,10 @@ jobs:
           releaseName: IMU FFT v${{ steps.version.outputs.app_version }}
           releaseBody: |
             Major changes:
-            - Smooths the 3D pose input with an 8 Hz low-pass accelerometer filter.
-            - Adds filtered `Tilt X` and `Tilt Y` topbar angle readouts from the same pose sample.
-            - Keeps the FFT magnitude chart on a stable dB scale instead of auto-ranging every update.
-            - Simplifies the model and chart chrome for a cleaner live view.
+            - Stabilizes topbar readout widths so live values no longer shift neighboring controls.
+            - Adds a little extra readout padding for a calmer topbar layout.
+            - Removes the question-mark help cursor from the top-left status LED hover state.
+            - Keeps the shared status tooltip behavior for connected, simulation, and no-sensor states.
 
             Download the Windows installer asset named `IMU.FFT_${{ steps.version.outputs.app_version }}_x64_en-US.msi`.
 

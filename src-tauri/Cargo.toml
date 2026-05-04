@@ -1,6 +1,6 @@
 [package]
 name = "imu-fft"
-version = "0.1.4"
+version = "0.1.5"
 description = "Minimal ICM-42688-P FFT viewer"
 authors = ["Tobias Koehler"]
 edition = "2021"
