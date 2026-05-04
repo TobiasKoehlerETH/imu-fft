@@ -11,6 +11,8 @@ export type ModelSnapshot = {
   ax: number;
   ay: number;
   az: number;
+  tiltX: number;
+  tiltY: number;
   roll: number;
   pitch: number;
   yaw: number;

@@ -61,6 +61,10 @@ type AxisLabelOption = {
 
 const accelAxes = ["x", "y", "z"] as const;
 const chartAxisTextColor = "#14161a";
+const fftDbAxisMin = -130;
+const fftDbAxisMax = -20;
+const poseAccelLowpassCutoffHz = 8;
+const sampleRateHz = 8000;
 
 const els = {
   statusIndicator: requireElement("status-indicator"),
@@ -70,7 +74,8 @@ const els = {
   headAx: requireElement("head-ax"),
   headAy: requireElement("head-ay"),
   headAz: requireElement("head-az"),
-  modelRate: requireElement("model-rate"),
+  headTiltX: requireElement("head-tilt-x"),
+  headTiltY: requireElement("head-tilt-y"),
   modelView: requireElement("model-view"),
   accelChart: requireElement("accel-chart"),
   fftChart: requireElement("fft-chart"),
@@ -94,7 +99,7 @@ els.updateInstallButton.addEventListener("click", () => {
   void installPendingUpdate();
 });
 
-let latestModel: ModelSnapshot = { ax: 0, ay: 0, az: 0, roll: 0, pitch: 0, yaw: 0 };
+let latestModel = createEmptyModelSnapshot();
 let pendingStatus: StatusSnapshot | null = null;
 let pendingFft: FftSnapshot | null = null;
 let pendingSensor: ModelSnapshot | null = null;
@@ -104,9 +109,7 @@ let pendingUpdate: Update | null = null;
 let updateDownloadedBytes = 0;
 let updateContentLength: number | null = null;
 
-const model = new ModelView(els.modelView, (rate) => {
-  els.modelRate.textContent = `${rate.toFixed(0)} Hz`;
-});
+const model = new ModelView(els.modelView, () => {});
 let charts: LiveCharts | null = null;
 
 function requireElement(id: string): HTMLElement {
@@ -172,6 +175,12 @@ function applySensorReadouts(snapshot: ModelSnapshot): void {
   els.headAx.textContent = snapshot.ax.toFixed(3);
   els.headAy.textContent = snapshot.ay.toFixed(3);
   els.headAz.textContent = snapshot.az.toFixed(3);
+  els.headTiltX.textContent = formatDegrees(snapshot.tiltX);
+  els.headTiltY.textContent = formatDegrees(snapshot.tiltY);
+}
+
+function formatDegrees(value: number): string {
+  return `${value.toFixed(1)}deg`;
 }
 
 function setSimulationEnabled(enabled: boolean): void {
@@ -297,7 +306,7 @@ function shouldDisplayData(): boolean {
 function clearDisplayedData(): void {
   charts?.updateAccel([]);
   charts?.updateFft([], []);
-  latestModel = { ax: 0, ay: 0, az: 0, roll: 0, pitch: 0, yaw: 0 };
+  latestModel = createEmptyModelSnapshot();
   model.applySnapshot(latestModel);
   pendingFft = { freqs: [], combinedDb: [], peakHz: 0, peakAxis: "x" };
   pendingSensor = latestModel;
@@ -320,6 +329,8 @@ class LiveCharts {
       yAxisName: "Acceleration (g)",
     }));
     this.fft.setOption(createBaseOption({
+      yMin: fftDbAxisMin,
+      yMax: fftDbAxisMax,
       unit: "dB",
       showXAxisLabels: true,
       xAxisName: "Frequency (Hz)",
@@ -413,7 +424,7 @@ class LiveCharts {
 
     this.fft.setOption(
       {
-        yAxis: createAutoYAxis(data.map(([, value]) => value), "dB"),
+        yAxis: createFixedYAxis(fftDbAxisMin, fftDbAxisMax, "dB"),
         series: [createFftSeries(data, peak)],
       },
       { lazyUpdate: true, silent: true },
@@ -448,7 +459,8 @@ function createFftSeries(
   const series = createLineSeries("Combined", data, "#14161a");
   if (peak !== null && peak[0] > 0 && peak[1] > -119) {
     series.markPoint = {
-      symbol: "circle",
+      symbol: "triangle",
+      symbolRotate: 180,
       symbolSize: 16,
       itemStyle: { color: "#dc2626", borderColor: "#ffffff", borderWidth: 2 },
       label: { show: false },
@@ -573,6 +585,15 @@ function createAutoYAxis(values: number[], unit: string): LiveChartOption["yAxis
   };
 }
 
+function createFixedYAxis(min: number, max: number, unit: string): LiveChartOption["yAxis"] {
+  return {
+    min,
+    max,
+    scale: false,
+    axisLabel: createYAxisLabel(unit),
+  };
+}
+
 function createYAxisLabel(unit: string): AxisLabelOption {
   return {
     color: chartAxisTextColor,
@@ -662,6 +683,8 @@ function startBrowserPreview(): void {
   };
 
   let sampleIndex = 0;
+  let filteredPoseAccel: [number, number, number] = [0, 0, 1];
+  const poseAccelFilter = new LowPassFilter(poseAccelLowpassCutoffHz, sampleRateHz);
   window.setInterval(() => {
     currentStreamState = simulationEnabled ? "simulated" : "searching";
     if (!simulationEnabled) {
@@ -676,9 +699,13 @@ function startBrowserPreview(): void {
       samples.push(...latest);
     }
 
+    for (let i = 0; i < 80; i += 1) {
+      filteredPoseAccel = poseAccelFilter.update(simulatedSample(sampleIndex + i));
+    }
+
     sampleIndex += 80;
     charts?.updateAccel(samples);
-    latestModel = createModelSnapshot(latest);
+    latestModel = createModelSnapshot(filteredPoseAccel);
     model.applySnapshot(latestModel);
     pendingSensor = latestModel;
   }, 50);
@@ -695,7 +722,7 @@ function startBrowserPreview(): void {
 }
 
 function simulatedSample(sampleIndex: number): [number, number, number] {
-  const t = sampleIndex / 8000;
+  const t = sampleIndex / sampleRateHz;
   const tau = 2 * Math.PI;
   return [
     simulatedAxisNoise(sampleIndex, 0),
@@ -715,6 +742,32 @@ function simulatedAxisNoise(sampleIndex: number, axis: number): number {
   return ((value / 0xffffffff) * 2 - 1) * 0.001;
 }
 
+class LowPassFilter {
+  private readonly alpha: number;
+  private value: [number, number, number] | null = null;
+
+  constructor(cutoffHz: number, sampleRateHz: number) {
+    const dt = 1 / sampleRateHz;
+    const rc = 1 / (2 * Math.PI * cutoffHz);
+    this.alpha = dt / (rc + dt);
+  }
+
+  update(sample: [number, number, number]): [number, number, number] {
+    if (!this.value) {
+      this.value = sample;
+      return sample;
+    }
+
+    const filtered: [number, number, number] = [
+      this.value[0] + this.alpha * (sample[0] - this.value[0]),
+      this.value[1] + this.alpha * (sample[1] - this.value[1]),
+      this.value[2] + this.alpha * (sample[2] - this.value[2]),
+    ];
+    this.value = filtered;
+    return filtered;
+  }
+}
+
 function simulatedFftSnapshot(): FftSnapshot {
   const freqs: number[] = [];
   const combinedDb: number[] = [];
@@ -732,9 +785,13 @@ function simulatedFftSnapshot(): FftSnapshot {
 }
 
 function createModelSnapshot([ax, ay, az]: [number, number, number]): ModelSnapshot {
-  const roll = Math.atan2(ax, Math.sqrt(ay * ay + az * az)) * 180 / Math.PI;
-  const yaw = Math.atan2(ay, az) * 180 / Math.PI;
-  return { ax, ay, az, roll, pitch: 0, yaw };
+  const roll = Math.atan2(-ay, Math.hypot(ax, az)) * 180 / Math.PI;
+  const yaw = Math.atan2(-ax, az) * 180 / Math.PI;
+  return { ax, ay, az, tiltX: roll, tiltY: yaw, roll, pitch: 0, yaw };
+}
+
+function createEmptyModelSnapshot(): ModelSnapshot {
+  return { ax: 0, ay: 0, az: 0, tiltX: 0, tiltY: 0, roll: 0, pitch: 0, yaw: 0 };
 }
 
 window.setInterval(() => {

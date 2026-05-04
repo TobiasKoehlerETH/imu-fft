@@ -2,7 +2,7 @@
 
 Minimal Tauri 2 desktop app for viewing the ICM-42688-P firmware UART stream, live acceleration plots, FFT peak readout, and a 3D orientation model.
 
-The current app version is `0.1.3`.
+The current app version is `0.1.4`.
 
 ## Launch the Desktop App
 
@@ -19,7 +19,8 @@ The app opens the first detected serial port at `921600` baud, clears the input 
 
 - The top-left status LED shows only the dot by default; the UI uses one shared tooltip style for hover/focus labels such as `Connected`, `Simulation`, and `No Sensor connected`.
 - The simulation toggle enables fallback sample data when no serial device is connected.
-- The top readouts show FFT peak frequency, peak axis, and the latest `Ax`, `Ay`, and `Az` values. The FFT peak marker stays hidden until live or simulated data is running.
+- The top readouts show FFT peak frequency, peak axis, latest `Ax`, `Ay`, `Az`, and filtered `Tilt X` / `Tilt Y` pose angles. The FFT peak marker stays hidden until live or simulated data is running.
+- The 3D model pose uses an 8 Hz low-pass filtered accelerometer stream before deriving its tilt angles, while the accelerometer chart and FFT still use the raw sample ring.
 - The icon-only tare button recenters the 3D model view.
 - If an updater release is available, the topbar shows a red update icon; hover or focus it to see update availability, download, install, or error text.
 
@@ -65,7 +66,7 @@ TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 
 `TAURI_SIGNING_PRIVATE_KEY` can be either the private key content or the signing key file content. The generated local key has no password, so `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` can be left empty unless you replace the key with a password-protected one.
 
-Run `.github/workflows/release.yml` manually to publish a new release. Choose `patch`, `minor`, or `major`, or pass an exact SemVer version such as `0.1.3`. The workflow updates `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`, commits the version bump, tags the release, and publishes the MSI plus updater metadata.
+Run `.github/workflows/release.yml` manually to publish a new release. Choose `patch`, `minor`, or `major`, or pass an exact SemVer version such as `0.1.4`. The workflow updates `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`, commits the version bump, tags the release, and publishes the MSI plus updater metadata.
 
 You can also bump versions locally before a release:
 

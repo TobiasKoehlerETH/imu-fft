@@ -21,6 +21,7 @@ const RING_CAPACITY: usize = dsp::FFT_SIZE * 2;
 const ACCEL_SNAPSHOT_SAMPLES: usize = 1000;
 const SIMULATED_AXIS_NOISE_G: f32 = 0.001;
 const SERIAL_RETRY_INTERVAL: Duration = Duration::from_secs(3);
+const POSE_ACCEL_LOWPASS_CUTOFF_HZ: f32 = 8.0;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,10 +49,13 @@ pub struct FftSnapshot {
 }
 
 #[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelSnapshot {
     ax: f32,
     ay: f32,
     az: f32,
+    tilt_x: f32,
+    tilt_y: f32,
     roll: f32,
     pitch: f32,
     yaw: f32,
@@ -176,9 +180,38 @@ pub fn orientation(ax: f32, ay: f32, az: f32) -> ModelSnapshot {
         ax,
         ay,
         az,
+        tilt_x: roll,
+        tilt_y: yaw,
         roll,
         pitch,
         yaw,
+    }
+}
+
+struct LowPassFilter {
+    alpha: f32,
+    value: Option<[f32; 3]>,
+}
+
+impl LowPassFilter {
+    fn new(cutoff_hz: f32, sample_rate_hz: f32) -> Self {
+        let dt = 1.0 / sample_rate_hz;
+        let rc = 1.0 / (2.0 * std::f32::consts::PI * cutoff_hz);
+        let alpha = dt / (rc + dt);
+        Self { alpha, value: None }
+    }
+
+    fn update(&mut self, sample: [f32; 3]) -> [f32; 3] {
+        let filtered = match self.value {
+            Some(previous) => [
+                previous[0] + self.alpha * (sample[0] - previous[0]),
+                previous[1] + self.alpha * (sample[1] - previous[1]),
+                previous[2] + self.alpha * (sample[2] - previous[2]),
+            ],
+            None => sample,
+        };
+        self.value = Some(filtered);
+        filtered
     }
 }
 
@@ -207,7 +240,8 @@ impl SampleRing {
         self.len
     }
 
-    pub fn capacity(&self) -> usize {
+    #[cfg(test)]
+    fn capacity(&self) -> usize {
         self.data.len()
     }
 
@@ -300,13 +334,7 @@ fn run_serial_worker(app: AppHandle, stop: Arc<AtomicBool>, simulation_enabled: 
             if simulation_enabled.load(Ordering::Relaxed) {
                 run_simulator(&app, &stop, &simulation_enabled, sequence_gaps, resyncs);
             } else {
-                emit_status(
-                    &app,
-                    "searching",
-                    String::new(),
-                    sequence_gaps,
-                    resyncs,
-                );
+                emit_status(&app, "searching", String::new(), sequence_gaps, resyncs);
                 sleep_or_stop(&stop, SERIAL_RETRY_INTERVAL);
             }
             continue;
@@ -346,7 +374,9 @@ fn run_serial_worker(app: AppHandle, stop: Arc<AtomicBool>, simulation_enabled: 
 
         let mut parser = FrameParser::new();
         let mut ring = SampleRing::new(RING_CAPACITY);
-        let mut latest = [0.0_f32; 3];
+        let mut pose_accel = [0.0_f32; 3];
+        let mut pose_accel_filter =
+            LowPassFilter::new(POSE_ACCEL_LOWPASS_CUTOFF_HZ, SAMPLE_RATE_HZ);
         let mut read_buf = [0u8; 4096];
         let mut last_status = Instant::now();
         let mut last_model = Instant::now();
@@ -360,7 +390,7 @@ fn run_serial_worker(app: AppHandle, stop: Arc<AtomicBool>, simulation_enabled: 
                         if let Some(frame) = parser.feed(*byte) {
                             let _seq = frame.seq;
                             for sample in frame.samples {
-                                latest = sample;
+                                pose_accel = pose_accel_filter.update(sample);
                                 ring.push(sample);
                             }
                         }
@@ -386,7 +416,10 @@ fn run_serial_worker(app: AppHandle, stop: Arc<AtomicBool>, simulation_enabled: 
             resyncs = parser.resyncs();
 
             if now.duration_since(last_model) >= Duration::from_millis(16) {
-                let _ = app.emit("model", orientation(latest[0], latest[1], latest[2]));
+                let _ = app.emit(
+                    "model",
+                    orientation(pose_accel[0], pose_accel[1], pose_accel[2]),
+                );
                 last_model = now;
             }
 
@@ -442,7 +475,8 @@ fn run_simulator(
 ) {
     let mut ring = SampleRing::new(RING_CAPACITY);
     let mut sample_index = 0usize;
-    let mut latest = [0.0_f32; 3];
+    let mut pose_accel = [0.0_f32; 3];
+    let mut pose_accel_filter = LowPassFilter::new(POSE_ACCEL_LOWPASS_CUTOFF_HZ, SAMPLE_RATE_HZ);
     let mut last_status = Instant::now() - Duration::from_secs(1);
     let mut last_model = Instant::now();
     let mut last_accel = Instant::now();
@@ -465,14 +499,18 @@ fn run_simulator(
         }
 
         for _ in 0..80 {
-            latest = simulated_sample(sample_index);
-            ring.push(latest);
+            let sample = simulated_sample(sample_index);
+            pose_accel = pose_accel_filter.update(sample);
+            ring.push(sample);
             sample_index = sample_index.wrapping_add(1);
         }
 
         let now = Instant::now();
         if now.duration_since(last_model) >= Duration::from_millis(16) {
-            let _ = app.emit("model", orientation(latest[0], latest[1], latest[2]));
+            let _ = app.emit(
+                "model",
+                orientation(pose_accel[0], pose_accel[1], pose_accel[2]),
+            );
             last_model = now;
         }
 
@@ -659,6 +697,24 @@ mod tests {
         assert!((snapshot.roll - expected_roll).abs() < 1.0e-6);
         assert_eq!(snapshot.pitch, 0.0);
         assert!((snapshot.yaw - expected_yaw).abs() < 1.0e-6);
+        assert!((snapshot.tilt_x - expected_roll).abs() < 1.0e-6);
+        assert!((snapshot.tilt_y - expected_yaw).abs() < 1.0e-6);
+    }
+
+    #[test]
+    fn low_pass_filter_smooths_pose_accel_steps() {
+        let mut filter = LowPassFilter::new(POSE_ACCEL_LOWPASS_CUTOFF_HZ, SAMPLE_RATE_HZ);
+        assert_eq!(filter.update([0.0, 0.0, 1.0]), [0.0, 0.0, 1.0]);
+
+        let first_step = filter.update([1.0, -1.0, 0.0]);
+        assert!(first_step[0] > 0.0 && first_step[0] < 1.0);
+        assert!(first_step[1] < 0.0 && first_step[1] > -1.0);
+        assert!(first_step[2] > 0.0 && first_step[2] < 1.0);
+
+        let second_step = filter.update([1.0, -1.0, 0.0]);
+        assert!(second_step[0] > first_step[0]);
+        assert!(second_step[1] < first_step[1]);
+        assert!(second_step[2] < first_step[2]);
     }
 
     #[test]

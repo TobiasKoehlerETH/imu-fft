@@ -1,9 +1,13 @@
 # Repo Memory
 
-Last reviewed: 2026-05-02
+Last reviewed: 2026-05-04
 
 ## Latest Work
 
+- Prepared release `v0.1.4` with low-pass filtered accelerometer input for 3D pose estimation and two topbar tilt-angle readouts derived from the same filtered pose sample.
+- Added `Tilt X` and `Tilt Y` topbar readouts alongside `Ax`, `Ay`, and `Az`; the live serial path and browser preview both use the same 8 Hz one-pole low-pass filter for pose snapshots.
+- Fixed the FFT display to use a stable dB axis range instead of auto-ranging on every FFT update.
+- Simplified chart/model chrome by removing the model-rate and static `8 kHz` title tags from the main workspace.
 - Changed the update notification to a red icon-only topbar button that shows availability/progress/error text through the shared hover/focus tooltip.
 - Bumped the app to `0.1.3` for the shared tooltip cleanup, black ECharts axis labels, and hidden idle FFT peak marker.
 - Replaced native topbar `title` tooltips with the shared `data-tooltip` CSS pattern so only one hover/focus tooltip appears.
@@ -19,6 +23,7 @@ Last reviewed: 2026-05-02
 
 ## Recent Repo Changes
 
+- Prepared release `v0.1.4`.
 - Published release `v0.1.3`.
 - Reissued `v0.1.2` again for the hover-only status LED behavior.
 - Reissued `v0.1.2` after the `v0.1.2` release commit.
@@ -36,6 +41,7 @@ Last reviewed: 2026-05-02
 - Backend: Tauri 2 + Rust in `src-tauri`, with serial discovery, frame parsing, sample buffering, simulation, orientation snapshots, and FFT analysis.
 - Runtime stream: binary `0xAA 0x55` frames at `921600` baud, 160 frames/s, 50 samples/frame, 8000 samples/s.
 - UI cadence: Rust emits model, acceleration, FFT, and status events on timers rather than per sample.
+- Pose model: Rust applies an 8 Hz one-pole low-pass filter before computing the `model` event angles. The `Tilt X` / `Tilt Y` topbar readouts come from that same filtered snapshot, while charts and FFT stay raw.
 
 ## Keep In Mind
 

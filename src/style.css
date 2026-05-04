@@ -260,7 +260,9 @@ button {
 
 #head-ax,
 #head-ay,
-#head-az {
+#head-az,
+#head-tilt-x,
+#head-tilt-y {
   min-width: 6ch;
 }
 

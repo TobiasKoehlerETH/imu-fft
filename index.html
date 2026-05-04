@@ -32,6 +32,14 @@
               <span class="top-readout-label">Az</span>
               <strong id="head-az">0.000</strong>
             </div>
+            <div class="top-readout">
+              <span class="top-readout-label">Tilt X</span>
+              <strong id="head-tilt-x">0.0deg</strong>
+            </div>
+            <div class="top-readout">
+              <span class="top-readout-label">Tilt Y</span>
+              <strong id="head-tilt-y">0.0deg</strong>
+            </div>
           </div>
           <div class="topbar-controls">
             <label class="switch-control" for="simulation-toggle">
@@ -57,7 +65,6 @@
         <section class="panel model-panel" aria-label="3D model">
           <div class="panel-title">
             <span class="panel-title-label">3D</span>
-            <span class="panel-title-tag" id="model-rate">0 Hz</span>
           </div>
           <div id="model-view"></div>
         </section>
@@ -76,7 +83,6 @@
                 <button class="legend-item" type="button" data-accel-axis="z" aria-pressed="true">
                   <span class="legend-dot" style="background:#0ea5a4"></span>Z
                 </button>
-                <span class="panel-title-tag">8 kHz</span>
               </div>
             </div>
             <div id="accel-chart" class="live-chart"></div>
